@@ -1,7 +1,9 @@
 /venv
 /backup
-archiGrad.io/**
-!archiGrad.io/**/.grid_layout
-!archiGrad.io/**/*.html
-
+archiGrad.io/**/*.png
+archiGrad.io/**/*.jpg
+archiGrad.io/**/*.jpeg
+archiGrad.io/**/*.gif
+archiGrad.io/**/*.webp
+archiGrad.io/**/*.svg
 
