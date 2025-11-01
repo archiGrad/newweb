@@ -57,7 +57,7 @@ MAX_GIF_FRAMES = 30  # Maximum number of frames to extract from GIFs
 #3D js
 STACK_SPACING = 0.15  # Vertical distance between stacked images in 3D scene
 ZOOM_SEED_MULTIPLIER = 293  # Random seed multiplier for camera zoom variation
-
+QUICKLOAD_TRESHOLD = 200
 
 # JSON field name mappings (shortened for file size). we do this to reduce filesize
 # ss = spritesheet
@@ -332,7 +332,9 @@ sprite_config = {
     'sprite_padding': SPRITE_PADDING,
     'sprites_per_row': SPRITES_PER_ROW,
     'stack_spacing': STACK_SPACING,
-    'zoom_seed_multiplier': ZOOM_SEED_MULTIPLIER
+    'zoom_seed_multiplier': ZOOM_SEED_MULTIPLIER,
+    'quickload_threshold': QUICKLOAD_TRESHOLD 
+
 }
 
 with open('data.json', 'w') as f:
@@ -517,14 +519,16 @@ async function createThreeScene(container, images, node) {{
     const scene = new THREE.Scene();
     const grouped = {{}};
 
-
     const SPRITESHEET_SIZE = spriteConfig.spritesheet_size;
     const SPRITE_SIZE = spriteConfig.sprite_size;
     const SPRITE_PADDING = spriteConfig.sprite_padding;
     const SPRITES_PER_ROW = spriteConfig.sprites_per_row;
     const STACK_SPACING = spriteConfig.stack_spacing;
     const ZOOM_SEED_MULTIPLIER = spriteConfig.zoom_seed_multiplier;
+    const QUICKLOAD_THRESHOLD = spriteConfig.quickload_threshold;
 
+    const useInstantLoad = images.length > QUICKLOAD_THRESHOLD
+    const delay = useInstantLoad ? 0 : 1;
 
     const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
     gridHelper.rotation.y = Math.PI / 2;
@@ -932,6 +936,8 @@ async function createThreeScene(container, images, node) {{
                     scene.add(mesh);
                     loadedImages++;
                     updateCount();
+                    if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
+
                 }}
 
                 loadedStacks++;
@@ -1076,6 +1082,8 @@ async function createThreeScene(container, images, node) {{
                         scene.add(mesh);
                         loadedImages++;
                         updateCount();
+                        if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
+
                     }}
 
                     loadedStacks++;
@@ -1220,6 +1228,8 @@ async function createThreeScene(container, images, node) {{
                     scene.add(mesh);
                     loadedImages++;
                     updateCount();
+                    if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
+
                 }}
 
                 loadedStacks++;
