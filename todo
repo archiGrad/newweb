@@ -1,0 +1,178 @@
+
+website
+
+urgency  🔥
+ease of implementation ⭐
+
+
+
+
+
+
+filesize long json names: 14mb
+filesize short json names:
+
+
+1.5 x 1.5  has 0.1 height  ==> 10 iterations / unit
+1 x 1 also, this is incorect. should be   more like 0.667 is moe like 14 iterations/unit
+
+delete spritesheet folder before starting. fresh start
+the bottons < and > bottom right does not work anymore
+when i have .accum file containing a number, this is the number i would like the text to be visible in the parent  reversed. 
+
+
+text   tags at bottom of texts moves when i scroll.......
+
+async loading for small stacks, instant loading for big stacks
+little loading screen on startup loading in textures
+
+
+
+foldable tree view with correct loading on click, no double loeading when expanding or collapsing the tree. 🔥 ⭐⭐ text underneath tree?, tree in the middle of screen?  🔥 ⭐ floating and collapsible tree view. ⭐⭐⭐
+
+have custom url links so i can send people the exact scene i want 🔥🔥🔥🔥 🔥⭐⭐⭐
+open website on random folder
+
+
+
+data,json is waay too big + spritesheets are too big. compress these
+seperate styling in index 🔥  
+reconsider different packing alforithm for 2d packing
+
+make it browser comaptible. chromium works ok, firefor and safari needs testin
+make a mobile version
+make a website duplicate for git. now 
+
+
+
+
+
+in progress-------------------------
+add effects to image spritesheet creation e.g. remove black bg to alpha
+make adjustable variables for image compression, resolution, spriteresolution etc
+bin stacking 3d models
+
+spritesheet, what kind of scaling algo do you use. nearest neighbour?
+can this be am option 
+
+
+make sure the annotations dont come to other div, hidden.
+** houdini sim needs a way to check the height of the clip. now its always the same, no way for higher builds
+
+ issue i notice. it seems that (even though i did not write, a proper grid layout is found in the correct files) , the second parent to the image folder is not dipalying the grid proper. └── 
+    ├── archiGrad.io  --> works as expcted.
+    │   └── all  -> works as expected
+    │       ├── projects -> works as expected
+    │       │   └── parentfolder  -> works as ecpected, good grid layout
+    │       │       └── parent  -->does not work as expected,  shows an incorrect grid layout
+    │       │           ├── project8
+    │       │           │   └── stack_0
+    │       │           └── project9
+    │       │               ├── stack_0
+    │       │               ├── stack_1
+    │       │               ├── stack_2
+    │       │               ├── stack_3
+    │       │               ├── stack_4
+    │       │               └── stack_5
+    │       ├── test   -> works good
+    │       │   ├── test --> same commnts as below
+    │       │   │   └── test  --> does not display correctly, same commnts as below
+    │       │   │       └── project4 -->works as axpected, 14 3d-divs
+    │       │   │           ├── stack_0 
+    │       │   │           ├── stack_1
+    │       │   │           ├── stack_2
+    │       │   │           ├── stack_3
+    │       │   │           ├── stack_4
+    │       │   │           ├── stack_5
+    │       │   │           ├── stack_6
+    │       │   │           ├── stack_7
+    │       │   │           ├── stack_8
+    │       │   │           ├── stack_9
+    │       │   │           ├── stack_10
+    │       │   │           ├── stack_11
+    │       │   │           ├── stack_12
+    │       │   │           └── stack_13
+    │       │   └── test (copy)  -> works as expected, shows a 2x7 grid
+    │       │       └── test ->does NOT work as expected. the grid is notinterpreted , it shows a 5x4 grid instead of the 2x7 grid.
+    │       │           └── project4 ->works as axpected, 14 3d-divs
+    │       │               ├── stack_0 ->works as axpected, individual stacks
+    │       │               ├── stack_1                                                                                                                                                               │       │               ├── .grid_layout (2x7)
+    │       │               ├── stack_2
+    │       │               ├── stack_3
+    │       │               ├── stack_4
+    │       │               ├── stack_5
+    │       │               ├── stack_6
+    │       │               ├── stack_7
+    │       │               ├── stack_8
+    │       │               ├── stack_9
+    │       │               ├── stack_10
+    │       │               ├── stack_11
+    │       │               ├── stack_12
+    │       │               └── stack_13
+    │       └── text_5   ->works as axpected
+    └── backup
+
+
+
+
+$F%20
+
+int($F/ch(chs("spare_input0") + "/iterations"))
+
+
+make small text
+annotations go over div
+1) determine the bounding box of the total stack fomration and center it, before 2) create a button in every 3d scene view bottom left that can 'turn of' the 3d annotations. simple, performant solution
+when adding stacks, there should be a way of doing this. how do you add a square stack to an already existing square stack 
+grids are not square
+some problem where the stakcs are also stacked.............................
+multi-grid support-> houdini
+make an extensive test dataset for every folder to make sure the logic and distribution of images is exact.
+build a simulation in houdini for designing the stacks.
+make camer angle buttons for the 3d viewers. 
+annotations go over left side of div
+when hohvering over a annotation, you cant zoom in or navigate in the 3d scene.
+annotations go over div when 3d scene is placed right, with a text div, combied with another div
+make sure the html text files are properly formatted such that weeird margins dont occur
+zoom does not work properly.  check it 
+3d viewer interactivity, clickable etc  🔥 🔥 🔥 ⭐⭐⭐⭐⭐⭐
+boerder between 3d and other disc is not white. should be white.
+make directories on the 3d viewer, clickable. we need to know at all times where we are at.  🔥 🔥 ⭐⭐⭐ nvisible folders? perhaps not all folders need to be visible.  🔥 🔥 🔥 ⭐⭐⭐⭐
+magenta tree view ofr depht. ⭐⭐⭐
+make sure that the 3d views are in the center of the stacks. now its the origin. it should be the height/2 🔥 🔥 🔥 🔥 
+
+div should match tree viewer 
+
+rethink navigation system. perhaps with arrows instead of a lineair directory?
+
+
+shocase the current level in the treeviewer by a different color.
+make a test html with everything included
+text annotations support 🔥🔥 🔥⭐⭐⭐⭐⭐
+loading screen with stacks and images
+iframe support. all of these need a lot of styling
+tyle text + images. + how can we load in those images. different folder? 🔥🔥🔥🔥 🔥⭐⭐⭐
+code optimialisation, now 540 lines. way too much 🔥 🔥 🔥 🔥 ⭐⭐⭐⭐⭐⭐⭐⭐
+houdini-3d slices support  🔥🔥 🔥 🔥 🔥⭐⭐⭐⭐⭐⭐⭐⭐
+3d multi grid support  🔥 🔥 🔥 🔥 🔥 🔥 ⭐⭐⭐⭐⭐⭐
+many performance tests  🔥 🔥 ⭐
+tresstest. 5000 images on low bandwidth  🔥 ⭐⭐⭐
+build in anti spam click, as this loads in textiures rapidly and crashed browser
+gif support 🔥🔥 ⭐⭐  ---> need to wok on differntial rate, and extracting correct framerate/frames. now its max 20 frames
+center objects, rotate not even. get a proper zoom on the camera because everything is rotated on 0,0,0, it should be 0,0,0 but y is the half of the stack. + add a random zoom that is depending on a seed.   🔥⭐
+
+done----------------
+now zooming is kinda random but it should depend on stack. zoom in stack first with bbox, thn apply a random zoom. will be way better
+annotations dont turn with model rotation !!!!!!!!!!!!
+geometry is now in the center
+loading with delay test. can we load images sequentially.  🔥 ⭐
+images load sequentially 
+very performative
+threejs helpers, grid and axis for easier tezting 🔥 🔥 🔥🔥 ⭐
+fix incorrect images: not really, just delete the bad ones. better for git and consistancy etc.
+fix multiple spritesheet overlaps: i guess. dont see any prominent bugs atm
+delete spritesheets on re-run
+orbitcontrol
+
+
+

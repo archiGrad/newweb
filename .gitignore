@@ -1,0 +1,8 @@
+/images
+/venv
+/backup
+archiGrad.io/**
+!archiGrad.io/**/.grid_layout
+!archiGrad.io/**/*.html
+
+

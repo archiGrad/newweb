@@ -1,0 +1,194 @@
+/* STYLING CONTENT */
+
+/* Image Grids */
+.image_grid_medium_cover {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+}
+.image_grid_medium_cover img {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+}
+
+.image_grid_small_contain_square {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(20px, 1fr));
+    gap: 10px;
+}
+.image_grid_small_contain_square img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+}
+
+/* Fullscreen Images */
+.image_fullscreen_contain {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.image_fullscreen_cover {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.image_fullscreen_fill {
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+}
+
+.image_fullwidth {
+    width: 100%;
+    height: auto;
+}
+
+.image_fullheight {
+    width: auto;
+    height: 100%;
+}
+
+/* Embedded Content */
+.pdf_viewer,
+.yt_fullscreen,
+.web_fullscreen {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* Text */
+.text_contained {
+    width: 100%;
+    overflow: auto;
+    padding: 20px;
+}
+
+.text_inverted {
+    color: black;
+    background: white;
+    padding: 2px 5px;
+}
+.text_inverted * {
+    color: black;
+    background: transparent;
+}
+
+/* Links */
+a {
+    color: #4af;
+    text-decoration: none;
+}
+a:hover {
+    text-decoration: underline;
+}
+
+.link_red { color: #f44; }
+.link_green { color: #4f4; }
+.link_yellow { color: #ff4; }
+.link_purple { color: #b4f; }
+.link_orange { color: #f84; }
+.link_white { color: white; }
+
+/* Titles */
+.title_xl {
+    font-size: 48px;
+    text-align: left;
+    margin: 20px 0;
+}
+
+.title_large {
+    font-size: 36px;
+    text-align: left;
+    margin: 15px 0;
+}
+
+.title_medium {
+    font-size: 24px;
+    text-align: left;
+    margin: 10px 0;
+}
+
+.title_small {
+    font-size: 18px;
+    text-align: left;
+    margin: 5px 0;
+}
+
+/* Positioning */
+.bottom_left {
+    font-size: 8px;
+    position: absolute;
+    bottom: 5px;
+    left: 5px;
+}
+
+.bottom_right {
+    font-size: 8px;
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+
+
+
+/* Spacers */
+.spacer_small {
+    height: 20px;
+}
+
+.spacer_medium {
+    height: 50px;
+}
+
+.spacer_large {
+    height: 100px;
+}
+
+/* Two Column Layout */
+.columns_2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.columns_2_left_wide {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 20px;
+}
+
+.columns_2_right_wide {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 20px;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
