@@ -182,10 +182,11 @@ async function createThreeScene(container, images, node) {
     const SPRITES_PER_ROW = spriteConfig.sprites_per_row;
     const STACK_SPACING = spriteConfig.stack_spacing;
     const ZOOM_SEED_MULTIPLIER = spriteConfig.zoom_seed_multiplier;
-    const QUICKLOAD_THRESHOLD = spriteConfig.quickload_threshold;
 
-    const useInstantLoad = images.length > QUICKLOAD_THRESHOLD
-    const delay = useInstantLoad ? 0 : 1;
+const QUICKLOAD_THRESHOLD = spriteConfig.quickload_threshold;
+const useInstantLoad = images.length > QUICKLOAD_THRESHOLD;
+const delay = useInstantLoad ? 0 : 1;
+
 
     const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
     gridHelper.rotation.y = Math.PI / 2;
@@ -979,7 +980,7 @@ async function createThreeScene(container, images, node) {
         stats.begin();
         sceneData.animationId = requestAnimationFrame(animate);
         controls.update();
-        const rotationAngle = Date.now() * 0.0000;
+        const rotationAngle = Date.now() * 0.0001;
         scene.rotation.y = rotationAngle;
         
         if (frameCount % 10 === 0) {
