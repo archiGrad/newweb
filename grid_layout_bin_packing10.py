@@ -4,76 +4,38 @@ from PIL import Image
 from natsort import natsorted
 
 SPRITESHEET_SIZE = 1024  * 4
-SPRITE_SIZE = 256
+SPRITE_SIZE = 64
 SPRITE_PADDING = 0
 SPRITES_PER_ROW = SPRITESHEET_SIZE // SPRITE_SIZE
 SPRITES_PER_SHEET = SPRITES_PER_ROW * SPRITES_PER_ROW
-RESIZE_METHOD = Image.NEAREST  # Image.LANCZOS for photos, Image.NEAREST for very blocky, no anti aliasing
-SPRITESHEET_FORMAT = 'webp'  # 'png' or 'webp'
-#WEBP only
-WEBP_QUALITY = 100  # 1-100, only for webp, I DONT THINK THIS WORKS...
-WEBP_METHOD = 0  # 0-6, compression effort, only for webp I DONT THINK THIS WORKS
-#PNG only
-PNG_COMPRESS_LEVEL = 9  # 0-9, only for png
-PNG_OPTIMIZE = True  # True/False, only for png
+RESIZE_METHOD = Image.LANCZOS
+SPRITESHEET_FORMAT = 'webp'
+WEBP_QUALITY = 100
+WEBP_METHOD = 0
+PNG_COMPRESS_LEVEL = 9
+PNG_OPTIMIZE = True
 
-#image filters
 SHARPEN = False
-SHARPEN_RADIUS = 2  # 0-10, sharpening radius
-SHARPEN_PERCENT = 100  # 0-500, sharpening strength (100 = original)
-SHARPEN_THRESHOLD = 3  # 0-255, minimum brightness change to sharpenA
+SHARPEN_RADIUS = 2
+SHARPEN_PERCENT = 100
+SHARPEN_THRESHOLD = 3
 
 GAUSSIAN_BLUR = False
 GAUSSIAN_BLUR_RADIUS = 2
-COLOR_TO_TRANSPARENT = 'blue'  # None, 'black','light_gray', 'dark_gray', 'orange','purple', 'white', 'red', 'green', 'blue', 'yellow', 'cyan', 'magenta'
-COLOR_THRESHOLD = 30 #treshold between 0-255
+COLOR_TO_TRANSPARENT = 'blue'
+COLOR_THRESHOLD = 30
 
 DITHERING = False
-DITHER_MODE = 'custom_palette'  # 'bw', 'color_reduce', 'custom_palette'
-DITHER_METHOD = 'ordered'  # 'floyd_steinberg', 'ordered', 'none'
-DITHER_COLORS = 256  # Only used for 'color_reduce' mode
-CUSTOM_PALETTE = ['#000000', '#FF0000', '#00FF00']  # Hex colors for 'custom_palette' mode
-#CUSTOM_PALETTE = ['#000000', '#FFFFFF']  # bw
-# CUSTOM_PALETTE = ['#000000', '#FF0000', '#00FF00', '#0000FF']  # rgbk
-# CUSTOM_PALETTE = ['#000000', '#FFFFFF', '#FF0000']  # newspaper
-# CUSTOM_PALETTE = ['#0f380f', '#306230', '#8bac0f', '#9bbc0f']  # gameboy
-# CUSTOM_PALETTE = ['#000000', '#5f574f', '#c2c3c7', '#ffffff']  # grayscale_4
-# CUSTOM_PALETTE = ['#140c1c', '#442434', '#30346d', '#4e4a4e', '#854c30', '#346524', '#d04648', '#757161', '#597dce', '#d27d2c', '#8595a1', '#6daa2c', '#d2aa99', '#6dc2ca', '#dad45e', '#deeed6']  # dawnbringer_16
-# CUSTOM_PALETTE = ['#000000', '#1d2b53', '#7e2553', '#008751', '#ab5236', '#5f574f', '#c2c3c7', '#fff1e8', '#ff004d', '#ffa300', '#ffec27', '#00e436', '#29adff', '#83769c', '#ff77a8', '#ffccaa']  # pico8
-# CUSTOM_PALETTE = ['#2c1e31', '#6b2643', '#ac2847', '#ec273f', '#94216a', '#df4ca0', '#f68181', '#f6c7b6']  # sunset_8
-# CUSTOM_PALETTE = ['#20283d', '#2d4a5c', '#4f7481', '#7da3a5', '#c3d2d4']  # ice_cream
-# CUSTOM_PALETTE = ['#fbf7f3', '#e5b083', '#426e5d', '#20283d']  # muted_4
-# CUSTOM_PALETTE = ['#000000', '#ff0000', '#00ff00', '#ffff00', '#0000ff', '#ff00ff', '#00ffff', '#ffffff']  # rgb_full
-# CUSTOM_PALETTE = ['#332c50', '#46878f', '#94e344', '#e2f3e4']  # spacehaze
-# CUSTOM_PALETTE = ['#0d2b45', '#203c56', '#544e68', '#8d697a', '#d08159', '#ffaa5e', '#ffd4a3', '#ffecd6']  # sweetie_8
+DITHER_MODE = 'custom_palette'
+DITHER_METHOD = 'ordered'
+DITHER_COLORS = 256
+CUSTOM_PALETTE = ['#000000', '#FF0000', '#00FF00']
 
+MAX_GIF_FRAMES = 30
 
-
-#GIF
-MAX_GIF_FRAMES = 30  # Maximum number of frames to extract from GIFs
-
-
-
-#3D js
-STACK_SPACING = 0.15  # Vertical distance between images. in houdini its 1x1x 0.1 here its 1.5x1.5x0.15, same thing
-ZOOM_SEED_MULTIPLIER = 293  # Random seed multiplier for camera zoom variation
-QUICKLOAD_TRESHOLD= 293  # Random seed multiplier for camera zoom variation
-
-
-# JSON field name mappings (shortened for file size). we do this to reduce filesize
-# ss = spritesheet
-# si = start_index
-# fc = frame_count
-# anim = is_animated
-# w = width
-# h = height
-# gi = global_index
-# path = original_path
-# idx = index (grid position)
-# ai = all_images
-# at = all_texts
-# oi = own_images
-# ot = own_texts
+STACK_SPACING = 0.15
+ZOOM_SEED_MULTIPLIER = 293
+QUICKLOAD_TRESHOLD= 293
 
 def apply_filter(img):
     if SHARPEN:
@@ -159,7 +121,6 @@ def apply_filter(img):
     
     return img
 
-
 def resize_image(img):
     w, h = img.size
     longest = max(w, h)
@@ -170,9 +131,6 @@ def resize_image(img):
         img = img.resize((new_w, new_h), RESIZE_METHOD)
     return img
 
-
-
-
 def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'images', 'backup']):
     if path.name in ignore:
         return None
@@ -182,6 +140,7 @@ def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'im
     children = []
     grid_layout = None
     no_accum = False
+    stop_accum = False
     
     if path.is_dir():
         grid_file = path / '.grid_layout'
@@ -190,9 +149,12 @@ def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'im
         
         no_accum_file = path / '.no_accum'
         no_accum = no_accum_file.exists() or '__NOACCUM__' in path.name
+        
+        stop_accum_file = path / '.stop_accum'
+        stop_accum = stop_accum_file.exists() or '__STOPACCUM__' in path.name
             
         for item in natsorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name)):
-            if item.name in ignore or item.name in ['.grid_layout', '.no_accum']:
+            if item.name in ignore or item.name in ['.grid_layout', '.no_accum', '.stop_accum']:
                 continue
             if item.is_file():
                 if item.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif', '.webp']:
@@ -228,14 +190,14 @@ def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'im
         'at': all_texts,
         'oi': images,
         'ot': texts,
-        'na': no_accum
+        'na': no_accum,
+        'sa': stop_accum
     }
     
     if grid_layout:
         result['grid_layout'] = grid_layout
     
     return result
-
 
 root = scan_folder(Path('.'))
 
@@ -342,7 +304,6 @@ sprite_config = {
     'stack_spacing': STACK_SPACING,
     'zoom_seed_multiplier': ZOOM_SEED_MULTIPLIER,
     'quickload_threshold': QUICKLOAD_TRESHOLD
-
 }
 
 with open('data.json', 'w') as f:
@@ -538,12 +499,6 @@ const QUICKLOAD_THRESHOLD = spriteConfig.quickload_threshold;
 const useInstantLoad = images.length > QUICKLOAD_THRESHOLD;
 const delay = useInstantLoad ? 0 : 1;
 
-
-    //const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
-    // gridHelper.rotation.y = Math.PI / 2;
-    // scene.add(gridHelper);
-    // const axesHelper = new THREE.AxesHelper(5);
-    // scene.add(axesHelper);
 
     images.forEach(imgData => {{
         const parts = imgData.path.split('/');
@@ -1395,10 +1350,34 @@ async function renderContent(node) {{
     activeScenes = [];
     const contentDiv = document.getElementById('content');
     contentDiv.innerHTML = '';
-    const children = node.children.length > 0 ? node.children : [node];
+    
+    console.log('=== renderContent DEBUG ===');
+    console.log('node:', node);
+    console.log('node.children.length:', node.children.length);
+    console.log('node.ai.length:', node.ai.length);
+    console.log('node.at.length:', node.at.length);
+    console.log('node.sa (stop_accum):', node.sa);
+    
+    let children = node.children.length > 0 ? node.children : [node];
+    console.log('children before filter:', children.map(c => ({{ name: c.name, ai: c.ai.length, at: c.at.length, sa: c.sa }})));
+    
+    children = children.map(child => {{
+        if (child.sa || node.sa) {{
+            return {{ ...child, at: [] }};
+        }}
+        return child;
+    }});
+    
+    children = children.filter(child => child.ai.length > 0 || child.at.length > 0);
+    console.log('children after filter:', children.map(c => ({{ name: c.name, ai: c.ai.length, at: c.at.length }})));
+    
     const count = children.length;
+    console.log('final count:', count);
     const cols = Math.ceil(Math.sqrt(count));
+    
     for (const child of children) {{
+        console.log('creating div for:', child.name, 'ai:', child.ai.length, 'at:', child.at.length);
+        console.log('creating div for:', child.name, 'ai:', child.ai.length, 'at:', child.at.length);
         const div = document.createElement('div');
         div.className = 'content-div';
         div.style.width = `calc(${{100/cols}}% - 2px)`;

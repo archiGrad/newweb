@@ -72,16 +72,25 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 let dataTree;
+let spriteConfig;
 let activeScenes = [];
 const spritesheets = {};
 const pendingLoads = {};
 const materialCache = {};
 const geometryCache = {};
 
+function seededRandom(seed) {
+        let state = seed;
+        state = (state * 1664525 + 1013904223) % 4294967296;
+        return state / 4294967296;
+    }
+
+
 fetch('data.json')
     .then(r => r.json())
     .then(d => {
-        dataTree = d;
+        dataTree = d.tree;
+        spriteConfig = d.sprite_config;
         buildTree(dataTree, document.getElementById('tree'));
     });
 
@@ -174,14 +183,22 @@ async function createThreeScene(container, images, node) {
     const scene = new THREE.Scene();
     const grouped = {};
 
-    const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
-    gridHelper.rotation.y = Math.PI / 2;
-    scene.add(gridHelper);
-    const axesHelper = new THREE.AxesHelper(5);
-    scene.add(axesHelper);
+    const SPRITESHEET_SIZE = spriteConfig.spritesheet_size;
+    const SPRITE_SIZE = spriteConfig.sprite_size;
+    const SPRITE_PADDING = spriteConfig.sprite_padding;
+    const SPRITES_PER_ROW = spriteConfig.sprites_per_row;
+    const STACK_SPACING = spriteConfig.stack_spacing;
+    const SEED = spriteConfig.seed;
+    const ORDERED_GRID_LAYOUT = spriteConfig.ordered_grid_layout;
+    const ROTATION_SPEED = spriteConfig.rotation_speed;
+
+const QUICKLOAD_THRESHOLD = spriteConfig.quickload_threshold;
+const useInstantLoad = images.length > QUICKLOAD_THRESHOLD;
+const delay = useInstantLoad ? 0 : 1;
+
 
     images.forEach(imgData => {
-        const parts = imgData.original_path.split('/');
+        const parts = imgData.path.split('/');
         const folder = parts.slice(0, -1).join('/') || 'root';
         if (!grouped[folder]) grouped[folder] = [];
         grouped[folder].push(imgData);
@@ -194,32 +211,152 @@ async function createThreeScene(container, images, node) {
     
     const sharedGeometry = new THREE.PlaneGeometry(1, 1);
     
-    let cols, rows;
+    const spacing = 1.5;
+    let cols, rows, offsetX, offsetZ;
+    let gridGroups;
+    
     if (node.grid_layout) {
         const parts = node.grid_layout.split('x');
         cols = parseInt(parts[0]);
         rows = parseInt(parts[1]);
+        offsetX = (cols - 1) * spacing / 2;
+        offsetZ = (rows - 1) * spacing / 2;
     } else {
-        cols = Math.ceil(Math.sqrt(folders.length));
-        rows = Math.ceil(folders.length / cols);
+        gridGroups = [];
+        const processedFolders = new Set();
+        
+	 
+        function collectGridChildren(n) {
+            if (n.grid_layout && n.ai.length > 0) {
+                const childFolders = folders.filter(f => f.startsWith(n.path + '/') || f === n.path);
+                const [gCols, gRows] = ORDERED_GRID_LAYOUT ? n.grid_layout.split('x').map(Number) : [1, 1];
+                gridGroups.push({
+                    folders: childFolders,
+                    cols: gCols,
+                    rows: gRows,
+                    path: n.path
+                });
+                childFolders.forEach(f => processedFolders.add(f));
+            } else if (n.children.length > 0) {
+                n.children.forEach(child => collectGridChildren(child));
+            } else if (n.ai.length > 0) {
+                const childFolders = folders.filter(f => f.startsWith(n.path + '/') || f === n.path);
+                gridGroups.push({
+                    folders: childFolders,
+                    cols: 1,
+                    rows: 1,
+                    path: n.path
+                });
+                childFolders.forEach(f => processedFolders.add(f));
+            }
+        }
+        
+        node.children.forEach(child => collectGridChildren(child));
+        
+        if (gridGroups.length > 0) {
+            const occupiedGrid = new Map();
+            
+            const isOccupied = (gx, gy, w, h) => {
+                for (let dy = 0; dy < h; dy++) {
+                    for (let dx = 0; dx < w; dx++) {
+                        if (occupiedGrid.has(`${gx + dx},${gy + dy}`)) return true;
+                    }
+                }
+                return false;
+            };
+            
+            const occupy = (gx, gy, w, h) => {
+                for (let dy = 0; dy < h; dy++) {
+                    for (let dx = 0; dx < w; dx++) {
+                        occupiedGrid.set(`${gx + dx},${gy + dy}`, true);
+                    }
+                }
+            };
+            
+            const findSpiralPosition = (w, h) => {
+                if (occupiedGrid.size === 0) return { x: 0, y: 0 };
+                
+                let radius = 1;
+                while (radius < 100) {
+                    for (let dy = -radius; dy <= radius; dy++) {
+                        for (let dx = -radius; dx <= radius; dx++) {
+                            if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
+                                if (!isOccupied(dx, dy, w, h)) {
+                                    return { x: dx, y: dy };
+                                }
+                            }
+                        }
+                    }
+                    radius++;
+                }
+                return { x: 0, y: 0 };
+            };
+            
+            gridGroups.forEach(group => {
+                const pos = findSpiralPosition(group.cols, group.rows);
+                group.gridX = pos.x;
+                group.gridY = pos.y;
+                occupy(pos.x, pos.y, group.cols, group.rows);
+            });
+            
+            let minGridX = Infinity, maxGridX = -Infinity;
+            let minGridZ = Infinity, maxGridZ = -Infinity;
+            gridGroups.forEach(group => {
+                minGridX = Math.min(minGridX, group.gridX);
+                maxGridX = Math.max(maxGridX, group.gridX + group.cols - 1);
+                minGridZ = Math.min(minGridZ, group.gridY);
+                maxGridZ = Math.max(maxGridZ, group.gridY + group.rows - 1);
+            });
+            
+            offsetX = ((maxGridX + minGridX) / 2) * spacing;
+            offsetZ = ((maxGridZ + minGridZ) / 2) * spacing;
+        } else {
+            cols = Math.ceil(Math.sqrt(folders.length));
+            rows = Math.ceil(folders.length / cols);
+            offsetX = (cols - 1) * spacing / 2;
+            offsetZ = (rows - 1) * spacing / 2;
+        }
     }
-    
-    const spacing = 1.5;
-    const offsetX = (cols - 1) * spacing / 2;
-    const offsetZ = (rows - 1) * spacing / 2;
 
     let minX = Infinity, maxX = -Infinity;
     let minZ = Infinity, maxZ = -Infinity;
-    folders.forEach((folder, stackIdx) => {
-        const row = Math.floor(stackIdx / cols);
-        const col = stackIdx % cols;
-        const xPos = col * spacing - offsetX;
-        const zPos = row * spacing - offsetZ;
-        minX = Math.min(minX, xPos);
-        maxX = Math.max(maxX, xPos);
-        minZ = Math.min(minZ, zPos);
-        maxZ = Math.max(maxZ, zPos);
-    });
+    
+    if (node.grid_layout) {
+        folders.forEach((folder, stackIdx) => {
+            const row = Math.floor(stackIdx / cols);
+            const col = stackIdx % cols;
+            const xPos = col * spacing - offsetX;
+            const zPos = row * spacing - offsetZ;
+            minX = Math.min(minX, xPos);
+            maxX = Math.max(maxX, xPos);
+            minZ = Math.min(minZ, zPos);
+            maxZ = Math.max(maxZ, zPos);
+        });
+    } else if (gridGroups && gridGroups.length > 0) {
+        gridGroups.forEach(group => {
+            group.folders.forEach((folder, localIdx) => {
+                const row = Math.floor(localIdx / group.cols);
+                const col = localIdx % group.cols;
+                const xPos = (group.gridX + col) * spacing - offsetX;
+                const zPos = (group.gridY + row) * spacing - offsetZ;
+                minX = Math.min(minX, xPos);
+                maxX = Math.max(maxX, xPos);
+                minZ = Math.min(minZ, zPos);
+                maxZ = Math.max(maxZ, zPos);
+            });
+        });
+    } else {
+        folders.forEach((folder, stackIdx) => {
+            const row = Math.floor(stackIdx / cols);
+            const col = stackIdx % cols;
+            const xPos = col * spacing - offsetX;
+            const zPos = row * spacing - offsetZ;
+            minX = Math.min(minX, xPos);
+            maxX = Math.max(maxX, xPos);
+            minZ = Math.min(minZ, zPos);
+            maxZ = Math.max(maxZ, zPos);
+        });
+    }
 
     const meshMaxSize = 1.5 * 1.5;
     const geomWidth = maxX - minX + meshMaxSize;
@@ -228,15 +365,10 @@ async function createThreeScene(container, images, node) {
     const margin = 15;
     const baseFrustumSize = maxDim + margin;
 
-    function seededRandom(seed) {
-        let state = seed;
-        state = (state * 1664525 + 1013904223) % 4294967296;
-        return state / 4294967296;
-    }
-
+    
     const seed = images.map(img => img.global_index).reduce((a, b) => a + b, 0);
-    const rand = seededRandom(seed * 12345);
-    const randomZoom = rand < 0.33 ? 0.1 : rand < 0.66 ? 1 : 2;
+    const rand = seededRandom(seed * SEED);  //this is a bit weird for sure
+    const randomZoom = rand < 0.33 ? 0.1 : rand < 0.66 ? 1 : 0.1;
     const frustumSize = baseFrustumSize * randomZoom;
 
     const aspectRatio = container.clientWidth / container.clientHeight;
@@ -266,7 +398,7 @@ async function createThreeScene(container, images, node) {
     const createButton = (text) => {
         const btn = document.createElement('button');
         btn.textContent = text;
-        btn.style.color = '#ff';
+        btn.style.color = '#fff';
         btn.style.border = 'none';
         btn.style.padding = '3px';
         btn.style.cursor = 'pointer';
@@ -283,7 +415,7 @@ async function createThreeScene(container, images, node) {
 
     let maxStackHeight = 0;
     folders.forEach(folder => {
-        maxStackHeight = Math.max(maxStackHeight, grouped[folder].length * 0.1);
+        maxStackHeight = Math.max(maxStackHeight, grouped[folder].length * STACK_SPACING);
     });
     const midHeight = maxStackHeight / 2;
 
@@ -323,6 +455,28 @@ async function createThreeScene(container, images, node) {
     labelContainer.style.pointerEvents = 'none';
     container.appendChild(labelContainer);
 
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.textContent = '';
+    toggleBtn.style.position = 'absolute';
+    toggleBtn.style.bottom = '5px';
+    toggleBtn.style.left = '5px';
+    toggleBtn.style.background = '#44f';
+    toggleBtn.style.border = 'none';
+    toggleBtn.style.width = '8px';
+    toggleBtn.style.height = '8px';
+    toggleBtn.style.borderRadius = '50%';
+    toggleBtn.style.cursor = 'pointer';
+    toggleBtn.style.padding = '0';
+    toggleBtn.style.zIndex = '100';
+    let labelsVisible = true;
+    toggleBtn.onclick = () => {
+        labelsVisible = !labelsVisible;
+        labelContainer.style.display = labelsVisible ? 'block' : 'none';
+        toggleBtn.style.background = labelsVisible ? '#44f' : '#f44';
+    };
+    container.appendChild(toggleBtn);
+
     const countDiv = document.createElement('div');
     countDiv.style.position = 'absolute';
     countDiv.style.bottom = '5px';
@@ -361,149 +515,445 @@ async function createThreeScene(container, images, node) {
 
     const stackLabels = [];
 
-    (async () => {
-        for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {
-            const folderName = folders[stackIdx];
-            const stackImages = grouped[folderName];
-            const row = Math.floor(stackIdx / cols);
-            const col = stackIdx % cols;
-            const xPos = col * spacing - offsetX;
-            const zPos = row * spacing - offsetZ;
 
-            for (let i = 0; i < stackImages.length; i++) {
-                const imgData = stackImages[i];
-                const texture = await loadSpritesheet(imgData.spritesheet);
-                if (!materialCache[imgData.spritesheet]) {
-                    materialCache[imgData.spritesheet] = new THREE.MeshBasicMaterial({
-                        map: texture,
-                        side: THREE.DoubleSide,
-                        transparent: true,
-                        opacity: 1
+    (async () => {
+        if (node.grid_layout) {
+            for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {
+                const folderName = folders[stackIdx];
+                const stackImages = grouped[folderName];
+                const row = Math.floor(stackIdx / cols);
+                const col = stackIdx % cols;
+                const xPos = col * spacing - offsetX;
+                const zPos = row * spacing - offsetZ;
+
+                for (let i = 0; i < stackImages.length; i++) {
+                    const imgData = stackImages[i];
+                    const texture = await loadSpritesheet(imgData.ss);
+                    if (!materialCache[imgData.ss]) {
+                        materialCache[imgData.ss] = new THREE.MeshBasicMaterial({
+                            map: texture,
+                            side: THREE.DoubleSide,
+                            transparent: true,
+                            opacity: 1
+                        });
+                    }
+                    const aspect = imgData.w / imgData.h;
+                    const height = 1.5;
+                    const width = height * aspect;
+                    const mesh = new THREE.Mesh(sharedGeometry, materialCache[imgData.ss]);
+                    mesh.scale.set(width, height, 1);
+                    mesh.position.x = xPos;
+                    mesh.position.y = i * STACK_SPACING;
+                    mesh.position.z = zPos;
+                    mesh.rotation.x = Math.PI / 2;
+                    mesh.rotation.y = Math.PI;
+                    mesh.rotation.z = Math.PI;
+                    if (imgData.anim) {
+                        mesh.userData = {
+                            imgData: imgData,
+                            spritesheet: imgData.ss
+                        };
+                        mesh.onBeforeRender = function() {
+                            const frame = Math.floor(Date.now() / 100) % this.userData.imgData.fc;
+                            const idx = this.userData.imgData.si + frame;
+                            const sprite_col = idx % SPRITES_PER_ROW;
+                            const sprite_row = Math.floor(idx / SPRITES_PER_ROW);
+                            const u_start = (sprite_col * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                            const u_end = u_start + SPRITE_SIZE / SPRITESHEET_SIZE;
+                            const v_start = 1 - ((sprite_row + 1) * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                            const v_end = 1 - (sprite_row * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                            const uvs = this.geometry.attributes.uv;
+                            uvs.setXY(0, u_start, v_end);
+                            uvs.setXY(1, u_end, v_end);
+                            uvs.setXY(2, u_start, v_start);
+                            uvs.setXY(3, u_end, v_start);
+                            uvs.needsUpdate = true;
+                        };
+                        mesh.geometry = sharedGeometry.clone();
+                    } else {
+                        const idx = imgData.idx;
+                        const sprite_col = idx % SPRITES_PER_ROW;
+                        const sprite_row = Math.floor(idx / SPRITES_PER_ROW);
+                        const u_start = (sprite_col * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const u_end = u_start + imgData.w / SPRITESHEET_SIZE;
+                        const v_start = 1 - ((sprite_row + 1) * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const v_end = 1 - (sprite_row * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const uvKey = `${u_start.toFixed(6)},${u_end.toFixed(6)},${v_start.toFixed(6)},${v_end.toFixed(6)}`;
+                        if (!geometryCache[uvKey]) {
+                            const geometry = sharedGeometry.clone();
+                            const uvs = geometry.attributes.uv;
+                            uvs.setXY(0, u_start, v_end);
+                            uvs.setXY(1, u_end, v_end);
+                            uvs.setXY(2, u_start, v_start);
+                            uvs.setXY(3, u_end, v_start);
+                            geometryCache[uvKey] = geometry;
+                        }
+                        mesh.geometry = geometryCache[uvKey];
+                    }
+                    scene.add(mesh);
+                    loadedImages++;
+                    updateCount();
+                    if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
+
+                }
+
+                loadedStacks++;
+                updateCount();
+                const topY = (stackImages.length - 1) * STACK_SPACING;
+                const worldPos = new THREE.Vector3(xPos, topY, zPos);
+                const label = document.createElement('span');
+
+                const currentPath = currentNode ? currentNode.path : '';
+                const currentFolderName = currentPath ? currentPath.split('/').pop() : '';
+                const relativePath = folderName.startsWith(currentPath) && currentPath 
+                    ? folderName.slice(currentPath.length + 1) 
+                    : folderName;
+                const pathParts = relativePath.split('/').filter(p => p);
+
+                const displayParts = currentPath ? ['..', currentFolderName, ...pathParts] : pathParts;
+
+                label.innerHTML = displayParts.map((part, idx) => {
+                    let color = '#4af';
+                    let partPath = '';
+                    
+                    if (part === '..') {
+                        partPath = currentPath.split('/').slice(0, -1).join('/');
+                        color = '#f44';
+                    } else if (idx === 1 && currentPath) {
+                        partPath = currentPath;
+                        color = '#44f';
+                    } else {
+                        partPath = currentPath ? currentPath + '/' + pathParts.slice(0, idx - 1).join('/') : pathParts.slice(0, idx).join('/');
+                        const relativeDepth = idx - 2;
+                        color = getDepthColor(relativeDepth);
+                    }
+                    
+                    const shouldHide = displayParts.length > 4 && idx > 2 && idx < displayParts.length - 1;
+                    const displayText = shouldHide ? '.' : part;
+                    
+                    return `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:${color};pointer-events:auto" data-path="${partPath}">${displayText}</span>`;
+                }).join('/') + `<span style="background:black;padding:2px 4px;font-size:9px;margin-left:2px;pointer-events:auto">${stackImages.length}</span>`;
+
+                label.style.position = 'absolute';
+                label.style.pointerEvents = 'auto';
+                label.style.pointerEvents = 'none';
+                label.addEventListener('wheel', (e) => {
+                    e.stopPropagation();
+                    renderer.domElement.dispatchEvent(new WheelEvent('wheel', e));
+                }, { passive: false });
+
+                label.style.cursor = 'pointer';
+                label.onclick = () => {
+                    const folderNode = findNodeByPath(dataTree, folderName);
+                    if (folderNode) renderContent(folderNode);
+                };
+                label.style.color = 'white';
+                label.style.fontFamily = 'monospace';
+                label.style.fontSize = '11px';
+                labelContainer.appendChild(label);
+
+                stackLabels.push({ element: label, position: worldPos, xPos, zPos, folderName });
+                label.style.pointerEvents = 'auto';
+                label.querySelectorAll('span[data-path]').forEach(span => {
+                    span.onclick = (e) => {
+                        e.stopPropagation();
+                        const node = findNodeByPath(dataTree, span.dataset.path);
+                        if (node) renderContent(node);
+                    };
+                });
+            }
+        } else if (gridGroups && gridGroups.length > 0) {
+            for (const group of gridGroups) {
+                for (let localIdx = 0; localIdx < group.folders.length; localIdx++) {
+                    const folderName = group.folders[localIdx];
+                    const stackImages = grouped[folderName];
+                    const row = Math.floor(localIdx / group.cols);
+                    const col = localIdx % group.cols;
+                    const xPos = (group.gridX + col) * spacing - offsetX;
+                    const zPos = (group.gridY + row) * spacing - offsetZ;
+
+                    for (let i = 0; i < stackImages.length; i++) {
+                        const imgData = stackImages[i];
+                        const texture = await loadSpritesheet(imgData.ss);
+                        if (!materialCache[imgData.ss]) {
+                            materialCache[imgData.ss] = new THREE.MeshBasicMaterial({
+                                map: texture,
+                                side: THREE.DoubleSide,
+                                transparent: true,
+                                opacity: 1
+                            });
+                        }
+                        const aspect = imgData.w / imgData.h;
+                        const height = 1.5;
+                        const width = height * aspect;
+                        const mesh = new THREE.Mesh(sharedGeometry, materialCache[imgData.ss]);
+                        mesh.scale.set(width, height, 1);
+                        mesh.position.x = xPos;
+                        mesh.position.y = i * STACK_SPACING;
+                        mesh.position.z = zPos;
+                        mesh.rotation.x = Math.PI / 2;
+                        mesh.rotation.y = Math.PI;
+                        mesh.rotation.z = Math.PI;
+                        if (imgData.anim) {
+                            mesh.userData = {
+                                imgData: imgData,
+                                spritesheet: imgData.ss
+                            };
+                            mesh.onBeforeRender = function() {
+                                const frame = Math.floor(Date.now() / 100) % this.userData.imgData.fc;
+                                const idx = this.userData.imgData.si + frame;
+                                const sprite_col = idx % SPRITES_PER_ROW;
+                                const sprite_row = Math.floor(idx / SPRITES_PER_ROW);
+                                const u_start = (sprite_col * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                                const u_end = u_start + SPRITE_SIZE / SPRITESHEET_SIZE;
+                                const v_start = 1 - ((sprite_row + 1) * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                                const v_end = 1 - (sprite_row * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                                const uvs = this.geometry.attributes.uv;
+                                uvs.setXY(0, u_start, v_end);
+                                uvs.setXY(1, u_end, v_end);
+                                uvs.setXY(2, u_start, v_start);
+                                uvs.setXY(3, u_end, v_start);
+                                uvs.needsUpdate = true;
+                            };
+                            mesh.geometry = sharedGeometry.clone();
+                        } else {
+                            const idx = imgData.idx;
+                            const sprite_col = idx % SPRITES_PER_ROW;
+                            const sprite_row = Math.floor(idx / SPRITES_PER_ROW);
+                            const u_start = (sprite_col * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                            const u_end = u_start + imgData.w / SPRITESHEET_SIZE;
+                            const v_start = 1 - ((sprite_row + 1) * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                            const v_end = 1 - (sprite_row * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                            const uvKey = `${u_start.toFixed(6)},${u_end.toFixed(6)},${v_start.toFixed(6)},${v_end.toFixed(6)}`;
+                            if (!geometryCache[uvKey]) {
+                                const geometry = sharedGeometry.clone();
+                                const uvs = geometry.attributes.uv;
+                                uvs.setXY(0, u_start, v_end);
+                                uvs.setXY(1, u_end, v_end);
+                                uvs.setXY(2, u_start, v_start);
+                                uvs.setXY(3, u_end, v_start);
+                                geometryCache[uvKey] = geometry;
+                            }
+                            mesh.geometry = geometryCache[uvKey];
+                        }
+                        scene.add(mesh);
+                        loadedImages++;
+                        updateCount();
+                        if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
+
+                    }
+
+                    loadedStacks++;
+                    updateCount();
+                    const topY = (stackImages.length - 1) * STACK_SPACING;
+                    const worldPos = new THREE.Vector3(xPos, topY, zPos);
+                    const label = document.createElement('span');
+
+                    const currentPath = currentNode ? currentNode.path : '';
+                    const currentFolderName = currentPath ? currentPath.split('/').pop() : '';
+                    const relativePath = folderName.startsWith(currentPath) && currentPath 
+                        ? folderName.slice(currentPath.length + 1) 
+                        : folderName;
+                    const pathParts = relativePath.split('/').filter(p => p);
+
+                    const displayParts = currentPath ? ['..', currentFolderName, ...pathParts] : pathParts;
+
+                    label.innerHTML = displayParts.map((part, idx) => {
+                        let color = '#4af';
+                        let partPath = '';
+                        
+                        if (part === '..') {
+                            partPath = currentPath.split('/').slice(0, -1).join('/');
+                            color = '#f44';
+                        } else if (idx === 1 && currentPath) {
+                            partPath = currentPath;
+                            color = '#44f';
+                        } else {
+                            partPath = currentPath ? currentPath + '/' + pathParts.slice(0, idx - 1).join('/') : pathParts.slice(0, idx).join('/');
+                            const relativeDepth = idx - 2;
+                            color = getDepthColor(relativeDepth);
+                        }
+                        
+                        const shouldHide = displayParts.length > 4 && idx > 2 && idx < displayParts.length - 1;
+                        const displayText = shouldHide ? '.' : part;
+                        
+                        return `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:${color};pointer-events:auto" data-path="${partPath}">${displayText}</span>`;
+                    }).join('/') + `<span style="background:black;padding:2px 4px;font-size:9px;margin-left:2px;pointer-events:auto">${stackImages.length}</span>`;
+
+                    label.style.position = 'absolute';
+                    label.style.pointerEvents = 'auto';
+                    label.style.pointerEvents = 'none';
+                    label.addEventListener('wheel', (e) => {
+                        e.stopPropagation();
+                        renderer.domElement.dispatchEvent(new WheelEvent('wheel', e));
+                    }, { passive: false });
+
+                    label.style.cursor = 'pointer';
+                    label.onclick = () => {
+                        const folderNode = findNodeByPath(dataTree, folderName);
+                        if (folderNode) renderContent(folderNode);
+                    };
+                    label.style.color = 'white';
+                    label.style.fontFamily = 'monospace';
+                    label.style.fontSize = '11px';
+                    labelContainer.appendChild(label);
+
+                    stackLabels.push({ element: label, position: worldPos, xPos, zPos, folderName });
+                    label.style.pointerEvents = 'auto';
+                    label.querySelectorAll('span[data-path]').forEach(span => {
+                        span.onclick = (e) => {
+                            e.stopPropagation();
+                            const node = findNodeByPath(dataTree, span.dataset.path);
+                            if (node) renderContent(node);
+                        };
                     });
                 }
-                const aspect = imgData.width / imgData.height;
-                const height = 1.5;
-                const width = height * aspect;
-                const mesh = new THREE.Mesh(sharedGeometry, materialCache[imgData.spritesheet]);
-                mesh.scale.set(width, height, 1);
-                mesh.position.x = xPos;
-                mesh.position.y = i * 0.1;
-                mesh.position.z = zPos;
-                mesh.rotation.x = Math.PI / 2;
-                mesh.rotation.y = Math.PI;
-                mesh.rotation.z = Math.PI;
-                if (imgData.is_animated) {
-                    mesh.userData = {
-                        imgData: imgData,
-                        spritesheet: imgData.spritesheet
-                    };
-                    mesh.onBeforeRender = function() {
-                        const frame = Math.floor(Date.now() / 100) % this.userData.imgData.frame_count;
-                        const idx = this.userData.imgData.start_index + frame;
-                        const sprite_col = idx % 8;
-                        const sprite_row = Math.floor(idx / 8);
-                        const u_start = (sprite_col * 256 + 1) / 2048;
-                        const u_end = u_start + 256 / 2048;
-                        const v_start = 1 - ((sprite_row + 1) * 256 + 1) / 2048;
-                        const v_end = 1 - (sprite_row * 256 + 1) / 2048;
-                        const uvs = this.geometry.attributes.uv;
-                        uvs.setXY(0, u_start, v_end);
-                        uvs.setXY(1, u_end, v_end);
-                        uvs.setXY(2, u_start, v_start);
-                        uvs.setXY(3, u_end, v_start);
-                        uvs.needsUpdate = true;
-                    };
-                    mesh.geometry = sharedGeometry.clone();
-                } else {
-                    const idx = imgData.index;
-                    const sprite_col = idx % 8;
-                    const sprite_row = Math.floor(idx / 8);
-                    const u_start = (sprite_col * 256 + 1) / 2048;
-                    const u_end = u_start + imgData.width / 2048;
-                    const v_start = 1 - ((sprite_row + 1) * 256 + 1) / 2048;
-                    const v_end = 1 - (sprite_row * 256 + 1) / 2048;
-                    const uvKey = `${u_start.toFixed(6)},${u_end.toFixed(6)},${v_start.toFixed(6)},${v_end.toFixed(6)}`;
-                    if (!geometryCache[uvKey]) {
-                        const geometry = sharedGeometry.clone();
-                        const uvs = geometry.attributes.uv;
-                        uvs.setXY(0, u_start, v_end);
-                        uvs.setXY(1, u_end, v_end);
-                        uvs.setXY(2, u_start, v_start);
-                        uvs.setXY(3, u_end, v_start);
-                        geometryCache[uvKey] = geometry;
-                    }
-                    mesh.geometry = geometryCache[uvKey];
-                }
-                scene.add(mesh);
-                loadedImages++;
-                updateCount();
-                await new Promise(resolve => setTimeout(resolve, 1));
             }
+        } else {
+            for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {
+                const folderName = folders[stackIdx];
+                const stackImages = grouped[folderName];
+                const row = Math.floor(stackIdx / cols);
+                const col = stackIdx % cols;
+                const xPos = col * spacing - offsetX;
+                const zPos = row * spacing - offsetZ;
 
-            loadedStacks++;
-            updateCount();
-            const topY = (stackImages.length - 1) * 0.1;
-            const worldPos = new THREE.Vector3(xPos, topY, zPos);
-            const label = document.createElement('span');
+                for (let i = 0; i < stackImages.length; i++) {
+                    const imgData = stackImages[i];
+                    const texture = await loadSpritesheet(imgData.ss);
+                    if (!materialCache[imgData.ss]) {
+                        materialCache[imgData.ss] = new THREE.MeshBasicMaterial({
+                            map: texture,
+                            side: THREE.DoubleSide,
+                            transparent: true,
+                            opacity: 1
+                        });
+                    }
+                    const aspect = imgData.w / imgData.h;
+                    const height = 1.5;
+                    const width = height * aspect;
+                    const mesh = new THREE.Mesh(sharedGeometry, materialCache[imgData.ss]);
+                    mesh.scale.set(width, height, 1);
+                    mesh.position.x = xPos;
+                    mesh.position.y = i * STACK_SPACING;
+                    mesh.position.z = zPos;
+                    mesh.rotation.x = Math.PI / 2;
+                    mesh.rotation.y = Math.PI;
+                    mesh.rotation.z = Math.PI;
+                    if (imgData.anim) {
+                        mesh.userData = {
+                            imgData: imgData,
+                            spritesheet: imgData.ss
+                        };
+                        mesh.onBeforeRender = function() {
+                            const frame = Math.floor(Date.now() / 100) % this.userData.imgData.fc;
+                            const idx = this.userData.imgData.si + frame;
+                            const sprite_col = idx % SPRITES_PER_ROW;
+                            const sprite_row = Math.floor(idx / SPRITES_PER_ROW);
+                            const u_start = (sprite_col * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                            const u_end = u_start + SPRITE_SIZE / SPRITESHEET_SIZE;
+                            const v_start = 1 - ((sprite_row + 1) * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                            const v_end = 1 - (sprite_row * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                            const uvs = this.geometry.attributes.uv;
+                            uvs.setXY(0, u_start, v_end);
+                            uvs.setXY(1, u_end, v_end);
+                            uvs.setXY(2, u_start, v_start);
+                            uvs.setXY(3, u_end, v_start);
+                            uvs.needsUpdate = true;
+                        };
+                        mesh.geometry = sharedGeometry.clone();
+                    } else {
+                        const idx = imgData.idx;
+                        const sprite_col = idx % SPRITES_PER_ROW;
+                        const sprite_row = Math.floor(idx / SPRITES_PER_ROW);
+                        const u_start = (sprite_col * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const u_end = u_start + imgData.w / SPRITESHEET_SIZE;
+                        const v_start = 1 - ((sprite_row + 1) * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const v_end = 1 - (sprite_row * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const uvKey = `${u_start.toFixed(6)},${u_end.toFixed(6)},${v_start.toFixed(6)},${v_end.toFixed(6)}`;
+                        if (!geometryCache[uvKey]) {
+                            const geometry = sharedGeometry.clone();
+                            const uvs = geometry.attributes.uv;
+                            uvs.setXY(0, u_start, v_end);
+                            uvs.setXY(1, u_end, v_end);
+                            uvs.setXY(2, u_start, v_start);
+                            uvs.setXY(3, u_end, v_start);
+                            geometryCache[uvKey] = geometry;
+                        }
+                        mesh.geometry = geometryCache[uvKey];
+                    }
+                    scene.add(mesh);
+                    loadedImages++;
+                    updateCount();
+                    if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
 
-            const currentPath = currentNode ? currentNode.path : '';
-            const currentFolderName = currentPath ? currentPath.split('/').pop() : '';
-            const relativePath = folderName.startsWith(currentPath) && currentPath 
-                ? folderName.slice(currentPath.length + 1) 
-                : folderName;
-            const pathParts = relativePath.split('/').filter(p => p);
-
-            const displayParts = currentPath ? ['..', currentFolderName, ...pathParts] : pathParts;
-
-            label.innerHTML = displayParts.map((part, idx) => {
-                let color = '#4af';
-                let partPath = '';
-                
-                if (part === '..') {
-                    partPath = currentPath.split('/').slice(0, -1).join('/');
-                    color = '#f44';
-                } else if (idx === 1 && currentPath) {
-                    partPath = currentPath;
-                    color = '#44f';
-                } else {
-                    partPath = currentPath ? currentPath + '/' + pathParts.slice(0, idx - 1).join('/') : pathParts.slice(0, idx).join('/');
-                    const relativeDepth = idx - 2;
-                    color = getDepthColor(relativeDepth);
                 }
-                
-                const shouldHide = displayParts.length > 4 && idx > 2 && idx < displayParts.length - 1;
-                const displayText = shouldHide ? '.' : part;
-                
-                return `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:${color};pointer-events:auto" data-path="${partPath}">${displayText}</span>`;
-            }).join('/') + `<span style="background:black;padding:2px 4px;font-size:9px;margin-left:2px;pointer-events:auto">${stackImages.length}</span>`;
 
-            label.style.position = 'absolute';
-            label.style.pointerEvents = 'auto';
-            label.style.pointerEvents = 'none';
-            label.addEventListener('wheel', (e) => {
-                e.stopPropagation();
-                renderer.domElement.dispatchEvent(new WheelEvent('wheel', e));
-            }, { passive: false });
+                loadedStacks++;
+                updateCount();
+                const topY = (stackImages.length - 1) * STACK_SPACING;
+                const worldPos = new THREE.Vector3(xPos, topY, zPos);
+                const label = document.createElement('span');
 
-            label.style.cursor = 'pointer';
-            label.onclick = () => {
-                const folderNode = findNodeByPath(dataTree, folderName);
-                if (folderNode) renderContent(folderNode);
-            };
-            label.style.color = 'white';
-            label.style.fontFamily = 'monospace';
-            label.style.fontSize = '11px';
-            labelContainer.appendChild(label);
+                const currentPath = currentNode ? currentNode.path : '';
+                const currentFolderName = currentPath ? currentPath.split('/').pop() : '';
+                const relativePath = folderName.startsWith(currentPath) && currentPath 
+                    ? folderName.slice(currentPath.length + 1) 
+                    : folderName;
+                const pathParts = relativePath.split('/').filter(p => p);
 
-            stackLabels.push({ element: label, position: worldPos, xPos, zPos, folderName });
-            label.style.pointerEvents = 'auto';
-            label.querySelectorAll('span[data-path]').forEach(span => {
-                span.onclick = (e) => {
+                const displayParts = currentPath ? ['..', currentFolderName, ...pathParts] : pathParts;
+
+                label.innerHTML = displayParts.map((part, idx) => {
+                    let color = '#4af';
+                    let partPath = '';
+                    
+                    if (part === '..') {
+                        partPath = currentPath.split('/').slice(0, -1).join('/');
+                        color = '#f44';
+                    } else if (idx === 1 && currentPath) {
+                        partPath = currentPath;
+                        color = '#44f';
+                    } else {
+                        partPath = currentPath ? currentPath + '/' + pathParts.slice(0, idx - 1).join('/') : pathParts.slice(0, idx).join('/');
+                        const relativeDepth = idx - 2;
+                        color = getDepthColor(relativeDepth);
+                    }
+                    
+                    const shouldHide = displayParts.length > 4 && idx > 2 && idx < displayParts.length - 1;
+                    const displayText = shouldHide ? '.' : part;
+                    
+                    return `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:${color};pointer-events:auto" data-path="${partPath}">${displayText}</span>`;
+                }).join('/') + `<span style="background:black;padding:2px 4px;font-size:9px;margin-left:2px;pointer-events:auto">${stackImages.length}</span>`;
+
+                label.style.position = 'absolute';
+                label.style.pointerEvents = 'auto';
+                label.style.pointerEvents = 'none';
+                label.addEventListener('wheel', (e) => {
                     e.stopPropagation();
-                    const node = findNodeByPath(dataTree, span.dataset.path);
-                    if (node) renderContent(node);
+                    renderer.domElement.dispatchEvent(new WheelEvent('wheel', e));
+                }, { passive: false });
+
+                label.style.cursor = 'pointer';
+                label.onclick = () => {
+                    const folderNode = findNodeByPath(dataTree, folderName);
+                    if (folderNode) renderContent(folderNode);
                 };
-            });
+                label.style.color = 'white';
+                label.style.fontFamily = 'monospace';
+                label.style.fontSize = '11px';
+                labelContainer.appendChild(label);
+
+                stackLabels.push({ element: label, position: worldPos, xPos, zPos, folderName });
+                label.style.pointerEvents = 'auto';
+                label.querySelectorAll('span[data-path]').forEach(span => {
+                    span.onclick = (e) => {
+                        e.stopPropagation();
+                        const node = findNodeByPath(dataTree, span.dataset.path);
+                        if (node) renderContent(node);
+                    };
+                });
+            }
         }
     })();
 
@@ -529,7 +979,7 @@ async function createThreeScene(container, images, node) {
         stats.begin();
         sceneData.animationId = requestAnimationFrame(animate);
         controls.update();
-        const rotationAngle = Date.now() * 0.0000;
+        const rotationAngle = Date.now() * ROTATION_SPEED;
         scene.rotation.y = rotationAngle;
         
         if (frameCount % 10 === 0) {
@@ -586,6 +1036,10 @@ function findNodeByPath(node, targetPath) {
 let currentNode = null;
 
 async function renderContent(node) {
+
+    const RANDOM_TEXTDIV_POSITION = spriteConfig.random_textdiv_position;
+    const SEED = spriteConfig.seed;
+
     currentNode = node;
     updateTreeColors();
 
@@ -593,10 +1047,34 @@ async function renderContent(node) {
     activeScenes = [];
     const contentDiv = document.getElementById('content');
     contentDiv.innerHTML = '';
-    const children = node.children.length > 0 ? node.children : [node];
+    
+    console.log('=== renderContent DEBUG ===');
+    console.log('node:', node);
+    console.log('node.children.length:', node.children.length);
+    console.log('node.ai.length:', node.ai.length);
+    console.log('node.at.length:', node.at.length);
+    console.log('node.sa (stop_accum):', node.sa);
+    
+    let children = node.children.length > 0 ? node.children : [node];
+    console.log('children before filter:', children.map(c => ({ name: c.name, ai: c.ai.length, at: c.at.length, sa: c.sa })));
+    
+    children = children.map(child => {
+        if (child.sa || node.sa) {
+            return { ...child, at: [] };
+        }
+        return child;
+    });
+    
+    children = children.filter(child => child.ai.length > 0 || child.at.length > 0);
+    console.log('children after filter:', children.map(c => ({ name: c.name, ai: c.ai.length, at: c.at.length })));
+    
     const count = children.length;
+    console.log('final count:', count);
     const cols = Math.ceil(Math.sqrt(count));
+    
     for (const child of children) {
+        console.log('creating div for:', child.name, 'ai:', child.ai.length, 'at:', child.at.length);
+        console.log('creating div for:', child.name, 'ai:', child.ai.length, 'at:', child.at.length);
         const div = document.createElement('div');
         div.className = 'content-div';
         div.style.width = `calc(${100/cols}% - 2px)`;
@@ -626,7 +1104,8 @@ async function renderContent(node) {
 
         div.appendChild(label);
 
-        if (child.all_images.length > 0 && child.all_texts.length > 0) {
+
+        if (child.ai.length > 0 && child.at.length > 0) {
             div.style.display = 'flex';
             div.style.flexDirection = 'row';
             const textDiv = document.createElement('div');
@@ -636,12 +1115,12 @@ async function renderContent(node) {
             textDiv.style.position = 'relative';
             textDiv.style.overflow = 'auto';
             let htmlContent = '';
-            for (const path of child.all_texts) {
+            for (const path of child.at) {
                 htmlContent += await loadText(path);
             }
             
             const hasParent = currentNode.path.split('/').length > 1;
-            const firstChildWithText = currentNode.children?.find(c => c.all_texts.length > 0);
+            const firstChildWithText = currentNode.children?.find(c => c.at.length > 0);
             const leftColor = hasParent ? '#f44' : '#44f';
             const rightColor = firstChildWithText ? '#4f4' : '#44f';
             
@@ -654,7 +1133,7 @@ async function renderContent(node) {
                 if (currentNode && currentNode.path) {
                     const parentPath = currentNode.path.split('/').slice(0, -1).join('/');
                     const parentNode = findNodeByPath(dataTree, parentPath) || dataTree;
-                    if (parentNode && parentNode.all_texts.length > 0) {
+                    if (parentNode && parentNode.at.length > 0) {
                         renderContent(parentNode);
                     }
                 }
@@ -662,29 +1141,46 @@ async function renderContent(node) {
             
             navRight.onclick = () => {
                 if (currentNode && currentNode.children && currentNode.children.length > 0) {
-                    const firstChildWithText = currentNode.children.find(c => c.all_texts.length > 0);
+                    const firstChildWithText = currentNode.children.find(c => c.at.length > 0);
                     if (firstChildWithText) {
                         renderContent(firstChildWithText);
                     }
                 }
             };
             
-            div.appendChild(textDiv);
+            //div.appendChild(textDiv);
             const imgDiv = document.createElement('div');
-            imgDiv.style.flex = '1';
+            imgDiv.style.flex = '2';
             imgDiv.style.position = 'relative';
             imgDiv.style.border = '1px solid white';
-            div.appendChild(imgDiv);
-            setTimeout(() => createThreeScene(imgDiv, child.all_images, child), 0);
+            imgDiv.style.overflow = 'hidden';
+            //div.appendChild(imgDiv);
 
-        } else if (child.all_images.length > 0) {
-            setTimeout(() => createThreeScene(div, child.all_images, child), 0);
+           if (RANDOM_TEXTDIV_POSITION) {
+               const seed = child.path.split('').reduce((a, c) => a + c.charCodeAt(0), 0) * SEED;
+               const rand = seededRandom(seed);
+               if (rand < 0.5) {
+                   div.appendChild(textDiv);
+                   div.appendChild(imgDiv);
+               } else {
+                   div.appendChild(imgDiv);
+                   div.appendChild(textDiv);
+               }
+           } else {
+               div.appendChild(textDiv);
+               div.appendChild(imgDiv);
+           } 
 
-        } else if (child.all_texts.length > 0) {
+            setTimeout(() => createThreeScene(imgDiv, child.ai, child), 0);
+
+        } else if (child.ai.length > 0) {
+            setTimeout(() => createThreeScene(div, child.ai, child), 0);
+
+        } else if (child.at.length > 0) {
             div.className = 'content-div text-content';
             div.style.position = 'relative';
             let htmlContent = '';
-            for (const path of child.all_texts) {
+            for (const path of child.at) {
                 htmlContent += await loadText(path);
             }
             
@@ -720,7 +1216,7 @@ async function renderContent(node) {
                 if (currentNode && currentNode.path) {
                     const parentPath = currentNode.path.split('/').slice(0, -1).join('/');
                     const parentNode = findNodeByPath(dataTree, parentPath) || dataTree;
-                    if (parentNode && parentNode.all_texts.length > 0) {
+                    if (parentNode && parentNode.at.length > 0) {
                         renderContent(parentNode);
                     }
                 }
@@ -728,7 +1224,7 @@ async function renderContent(node) {
             
             navRight.onclick = () => {
                 if (currentNode && currentNode.children && currentNode.children.length > 0) {
-                    const firstChildWithText = currentNode.children.find(c => c.all_texts.length > 0);
+                    const firstChildWithText = currentNode.children.find(c => c.at.length > 0);
                     if (firstChildWithText) {
                         renderContent(firstChildWithText);
                     }

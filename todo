@@ -5,6 +5,17 @@ urgency  🔥
 ease of implementation ⭐
 
 
+
+
+add my comment sback in global vars
+
+
+zoom, tooslow
+not 50% text width? too much?
+
+
+show in the treeview where the .stop_accum files ar red dot?
+
 zoom levels adjust , + also i dont think they are influenced by boundingbox
 need to optimize again, i think i have too many listeners overloading memory
 fix the scrollbars, looks stupid
@@ -18,7 +29,6 @@ text   tags at bottom of texts moves when i scroll.......
 
 little loading screen on startup loading in textures
 
-fix the damn text. .accum
 
 foldable tree view with correct loading on click, no double loeading when expanding or collapsing the tree. 🔥 ⭐⭐ text underneath tree?, tree in the middle of screen?  🔥 ⭐ floating and collapsible tree view. ⭐⭐⭐
 
@@ -39,6 +49,11 @@ make a mobile version
 
 in progress-------------------------
 
+text no accum in mid folder, if found, no div
+switch orientation of the text/3d layer. left-right, now always the same
+stop __STOPACCUM__in filename , is stupid
+fix the damn text. .accum
+made orderd_grid_layout an global var 
 
 1.5 x 1.5  has 0.1 height  ==> 10 iterations / unit
 1 x 1 also, this is incorect. should be   more like 0.667 is moe like 14 iterations/unit

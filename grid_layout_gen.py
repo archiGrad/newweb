@@ -613,7 +613,6 @@ async function createThreeScene(container, images, node) {
                 scene.add(mesh);
                 loadedImages++;
                 updateCount();
-                await new Promise(resolve => setTimeout(resolve, 1));
             }
 
             loadedStacks++;
