@@ -4,15 +4,15 @@ from PIL import Image
 from natsort import natsorted
 
 SPRITESHEET_SIZE = 1024  * 4
-SPRITE_SIZE = 64
+SPRITE_SIZE = 256
 SPRITE_PADDING = 0
 SPRITES_PER_ROW = SPRITESHEET_SIZE // SPRITE_SIZE
 SPRITES_PER_SHEET = SPRITES_PER_ROW * SPRITES_PER_ROW
-RESIZE_METHOD = Image.LANCZOS  # Image.LANCZOS for photos, Image.NEAREST for very blocky, no anti aliasing
+RESIZE_METHOD = Image.NEAREST  # Image.LANCZOS for photos, Image.NEAREST for very blocky, no anti aliasing
 SPRITESHEET_FORMAT = 'webp'  # 'png' or 'webp'
 #WEBP only
-WEBP_QUALITY = 90  # 1-100, only for webp
-WEBP_METHOD = 6  # 0-6, compression effort, only for webp
+WEBP_QUALITY = 100  # 1-100, only for webp, I DONT THINK THIS WORKS...
+WEBP_METHOD = 0  # 0-6, compression effort, only for webp I DONT THINK THIS WORKS
 #PNG only
 PNG_COMPRESS_LEVEL = 9  # 0-9, only for png
 PNG_OPTIMIZE = True  # True/False, only for png
@@ -55,7 +55,7 @@ MAX_GIF_FRAMES = 30  # Maximum number of frames to extract from GIFs
 
 
 #3D js
-STACK_SPACING = 0.15  # Vertical distance between stacked images in 3D scene
+STACK_SPACING = 0.15  # Vertical distance between images. in houdini its 1x1x 0.1 here its 1.5x1.5x0.15, same thing
 ZOOM_SEED_MULTIPLIER = 293  # Random seed multiplier for camera zoom variation
 QUICKLOAD_TRESHOLD= 293  # Random seed multiplier for camera zoom variation
 
@@ -532,11 +532,11 @@ const useInstantLoad = images.length > QUICKLOAD_THRESHOLD;
 const delay = useInstantLoad ? 0 : 1;
 
 
-    const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
-    gridHelper.rotation.y = Math.PI / 2;
-    scene.add(gridHelper);
-    const axesHelper = new THREE.AxesHelper(5);
-    scene.add(axesHelper);
+    //const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
+    // gridHelper.rotation.y = Math.PI / 2;
+    // scene.add(gridHelper);
+    // const axesHelper = new THREE.AxesHelper(5);
+    // scene.add(axesHelper);
 
     images.forEach(imgData => {{
         const parts = imgData.path.split('/');
@@ -713,7 +713,7 @@ const delay = useInstantLoad ? 0 : 1;
 
     const seed = images.map(img => img.global_index).reduce((a, b) => a + b, 0);
     const rand = seededRandom(seed * ZOOM_SEED_MULTIPLIER);
-    const randomZoom = rand < 0.33 ? 0.1 : rand < 0.66 ? 1 : 2;
+    const randomZoom = rand < 0.33 ? 0.1 : rand < 0.66 ? 1 : 0.1;
     const frustumSize = baseFrustumSize * randomZoom;
 
     const aspectRatio = container.clientWidth / container.clientHeight;

@@ -13,6 +13,8 @@ def resize_image(img):
         img = img.resize((new_w, new_h), Image.LANCZOS)
     return img
 
+
+
 def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'images']):
     if path.name in ignore:
         return None
@@ -21,14 +23,18 @@ def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'im
     texts = []
     children = []
     grid_layout = None
+    no_accum = False
     
     if path.is_dir():
         grid_file = path / '.grid_layout'
         if grid_file.exists():
             grid_layout = grid_file.read_text().strip()
+        
+        no_accum_file = path / '.no_accum'
+        no_accum = no_accum_file.exists() or '__NOACCUM__' in path.name
             
         for item in natsorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name)):
-            if item.name in ignore or item.name == '.grid_layout':
+            if item.name in ignore or item.name in ['.grid_layout', '.no_accum']:
                 continue
             if item.is_file():
                 if item.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif', '.webp']:
@@ -44,7 +50,8 @@ def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'im
         all_texts = texts.copy()
         for child in children:
             all_images.extend(child['all_images'])
-            all_texts.extend(child['all_texts'])
+            if not child.get('no_accum', False):
+                all_texts.extend(child['all_texts'])
     
     content_type = 'empty'
     if all_images and all_texts:
@@ -62,7 +69,8 @@ def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'im
         'all_images': all_images,
         'all_texts': all_texts,
         'own_images': images,
-        'own_texts': texts
+        'own_texts': texts,
+        'no_accum': no_accum
     }
     
     if grid_layout:
