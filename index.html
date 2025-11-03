@@ -86,44 +86,51 @@ function seededRandom(seed) {
     }
 
 
+function getAllSpritesheetPaths(node, paths = new Set()) {
+    node.ai.forEach(img => paths.add(img.ss));
+    node.oi.forEach(img => paths.add(img.ss));
+    node.children.forEach(child => getAllSpritesheetPaths(child, paths));
+    return Array.from(paths);
+}
 
-let allSpritesheets = [];
+async function preloadSpritesheets(paths) {
+    const loadProgress = document.getElementById('load-progress');
+    let loaded = 0;
+    
+    const promises = paths.map(path => 
+        loadSpritesheet(path).then(() => {
+            loaded++;
+            loadProgress.textContent = `${loaded}/${paths.length}`;
+        })
+    );
+    
+    await Promise.all(promises);
+}
+
+
+
 
 fetch('data.json')
     .then(r => r.json())
-    .then(d => {
+    .then(async d => {
         dataTree = d.tree;
         spriteConfig = d.sprite_config;
         
-        const loadScreen = document.createElement('div');
-        loadScreen.id = 'global-loader';
-        loadScreen.innerHTML = 'Loading spritesheets: 0/0';
-        loadScreen.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:black;color:white;display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:20px;z-index:10000';
-        document.body.appendChild(loadScreen);
+        const loader = document.createElement('div');
+        loader.id = 'loader';
+        loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:monospace;font-size:14px;';
+        loader.innerHTML = '<div style="text-align:center;"><div id="load-text">loading spritesheets...</div><div id="load-progress">0/0</div></div>';
+        document.body.appendChild(loader);
         
-        function collectAllSpritesheets(node) {
-            node.ai.forEach(img => {
-                if (!allSpritesheets.includes(img.ss)) {
-                    allSpritesheets.push(img.ss);
-                }
-            });
-            node.children.forEach(child => collectAllSpritesheets(child));
-        }
+        const paths = getAllSpritesheetPaths(dataTree);
+        document.getElementById('load-progress').textContent = `0/${paths.length}`;
+        await preloadSpritesheets(paths);
         
-        collectAllSpritesheets(dataTree);
-        console.log(`[GLOBAL] Preloading ${allSpritesheets.length} spritesheets`);
-        
-        let loaded = 0;
-        Promise.all(allSpritesheets.map(async (sheet) => {
-            await loadSpritesheet(sheet);
-            loaded++;
-            loadScreen.innerHTML = `Loading spritesheets: ${loaded}/${allSpritesheets.length}`;
-        })).then(() => {
-            console.log('[GLOBAL] All spritesheets loaded');
-            loadScreen.remove();
-            buildTree(dataTree, document.getElementById('tree'));
-        });
+        loader.remove();
+        buildTree(dataTree, document.getElementById('tree'));
     });
+
+
 
 
 
@@ -196,21 +203,35 @@ function disposeScene(sceneData) {
     if (sceneData.scene) sceneData.scene.clear();
 }
 
+
+
+
+
+
+
+
+
+
 async function loadSpritesheet(path) {
     if (spritesheets[path]) return spritesheets[path];
-    if (pendingLoads[path]) return pendingLoads[path];
-    pendingLoads[path] = new Promise((resolve) => {
+    
+    return new Promise((resolve) => {
         const loader = new THREE.TextureLoader();
         loader.load(path, (texture) => {
             texture.minFilter = THREE.NearestFilter;
             texture.magFilter = THREE.NearestFilter;
             spritesheets[path] = texture;
-            delete pendingLoads[path];
             resolve(texture);
         });
     });
-    return pendingLoads[path];
 }
+
+
+
+
+
+
+
 
 async function createThreeScene(container, images, node) {
     const scene = new THREE.Scene();
@@ -561,7 +582,7 @@ const delay = useInstantLoad ? 0 : 1;
 
                 for (let i = 0; i < stackImages.length; i++) {
                     const imgData = stackImages[i];
-                    const texture = spritesheets[imgData.ss];
+                    const texture = await loadSpritesheet(imgData.ss);
                     if (!materialCache[imgData.ss]) {
                         materialCache[imgData.ss] = new THREE.MeshBasicMaterial({
                             map: texture,
@@ -707,7 +728,7 @@ const delay = useInstantLoad ? 0 : 1;
 
                     for (let i = 0; i < stackImages.length; i++) {
                         const imgData = stackImages[i];
-                        const texture = spritesheets[imgData.ss];
+                        const texture = await loadSpritesheet(imgData.ss);
                         if (!materialCache[imgData.ss]) {
                             materialCache[imgData.ss] = new THREE.MeshBasicMaterial({
                                 map: texture,
@@ -853,7 +874,7 @@ const delay = useInstantLoad ? 0 : 1;
 
                 for (let i = 0; i < stackImages.length; i++) {
                     const imgData = stackImages[i];
-                    const texture = spritesheets[imgData.ss];
+                    const texture = await loadSpritesheet(imgData.ss);
                     if (!materialCache[imgData.ss]) {
                         materialCache[imgData.ss] = new THREE.MeshBasicMaterial({
                             map: texture,
