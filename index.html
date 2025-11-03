@@ -95,18 +95,20 @@ function getAllSpritesheetPaths(node, paths = new Set()) {
 
 async function preloadSpritesheets(paths) {
     const loadProgress = document.getElementById('load-progress');
+    const tempRenderer = new THREE.WebGLRenderer();
     let loaded = 0;
     
     const promises = paths.map(path => 
-        loadSpritesheet(path).then(() => {
+        loadSpritesheet(path).then(texture => {
+            tempRenderer.initTexture(texture);
             loaded++;
             loadProgress.textContent = `${loaded}/${paths.length}`;
         })
     );
     
     await Promise.all(promises);
+    tempRenderer.dispose();
 }
-
 
 
 
