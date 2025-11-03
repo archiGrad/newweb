@@ -423,21 +423,38 @@ function getAllSpritesheetPaths(node, paths = new Set()) {{
 
 async function preloadSpritesheets(paths) {{
     const loadProgress = document.getElementById('load-progress');
-    const tempRenderer = new THREE.WebGLRenderer();
     let loaded = 0;
     
     const promises = paths.map(path => 
-        loadSpritesheet(path).then(texture => {{
-            tempRenderer.initTexture(texture);
+        loadSpritesheet(path).then(() => {{
             loaded++;
             loadProgress.textContent = `${{loaded}}/${{paths.length}}`;
         }})
     );
     
     await Promise.all(promises);
+    
+    console.log('All spritesheets loaded, uploading to GPU...');
+    
+    const tempRenderer = new THREE.WebGLRenderer();
+    const tempScene = new THREE.Scene();
+    const tempCamera = new THREE.Camera();
+    const tempGeometry = new THREE.PlaneGeometry(1, 1);
+    
+    Object.values(spritesheets).forEach(texture => {{
+        const material = new THREE.MeshBasicMaterial({{ map: texture }});
+        const mesh = new THREE.Mesh(tempGeometry, material);
+        tempScene.add(mesh);
+    }});
+    
+    tempRenderer.render(tempScene, tempCamera);
+    
+    tempGeometry.dispose();
+    tempScene.children.forEach(mesh => mesh.material.dispose());
     tempRenderer.dispose();
+    
+    console.log('GPU upload complete');
 }}
-
 
 
 fetch('data.json')
