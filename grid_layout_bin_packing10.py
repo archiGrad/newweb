@@ -38,7 +38,7 @@ MAX_GIF_FRAMES = 30
 
 STACK_SPACING = 0.15
 SEED = 293 # Master seed for deterministic randomization (zoom, layout, etc)
-QUICKLOAD_TRESHOLD= 700
+QUICKLOAD_TRESHOLD= 293
 
 ORDERED_GRID_LAYOUT = True
 
@@ -407,52 +407,6 @@ const pendingLoads = {{}};
 const materialCache = {{}};
 const geometryCache = {{}};
 
-
-function getNodeFromUrl() {{
-    const hash = window.location.hash.slice(1);
-    if (!hash) return null;
-    const path = decodeURIComponent(hash);
-    return findNodeByPath(dataTree, path);
-}}
-
-function setUrlFromNode(node) {{
-    window.location.hash = encodeURIComponent(node.path);
-}}
-
-
-
-function createLoadingScreen() {{
-    const overlay = document.createElement('div');
-    overlay.id = 'loading-overlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:11px;z-index:9999;';
-    
-    const content = document.createElement('div');
-    content.id = 'loading-content';
-    content.innerHTML = 'loading spritesheets: 0<br>loading stacks: 0/0';
-    
-    overlay.appendChild(content);
-    document.body.appendChild(overlay);
-    
-    return {{
-        updateSheets: (count) => {{
-            const lines = content.innerHTML.split('<br>');
-            lines[0] = `loading spritesheets: ${{count}}`;
-            content.innerHTML = lines.join('<br>');
-        }},
-        updateStacks: (loaded, total) => {{
-            const lines = content.innerHTML.split('<br>');
-            lines[1] = `loading stacks: ${{loaded}}/${{total}}`;
-            content.innerHTML = lines.join('<br>');
-        }},
-        remove: () => {{
-            overlay.remove();
-        }}
-    }};
-}}
-
-
-
-
 function seededRandom(seed) {{
         let state = seed;
         state = (state * 1664525 + 1013904223) % 4294967296;
@@ -467,27 +421,13 @@ fetch('data.json')
         spriteConfig = d.sprite_config;
         buildTree(dataTree, document.getElementById('tree'));
         
-        const urlNode = getNodeFromUrl();
-        renderContent(urlNode || dataTree);
+        const loader = document.createElement('div');
+        loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:monospace;';
+        loader.textContent = 'loading...';
+        document.body.appendChild(loader);
         
-        window.addEventListener('hashchange', () => {{
-            const node = getNodeFromUrl();
-            if (node) renderContent(node, true);
-        }});
-    }});
-fetch('data.json')
-    .then(r => r.json())
-    .then(d => {{
-        dataTree = d.tree;
-        spriteConfig = d.sprite_config;
-        buildTree(dataTree, document.getElementById('tree'));
-        
-        const urlNode = getNodeFromUrl();
-        renderContent(urlNode || dataTree);
-        
-        window.addEventListener('hashchange', () => {{
-            const node = getNodeFromUrl();
-            if (node) renderContent(node, true);
+        renderContent(dataTree).then(() => {{
+            loader.remove();
         }});
     }});
 
@@ -560,8 +500,6 @@ function disposeScene(sceneData) {{
     if (sceneData.scene) sceneData.scene.clear();
 }}
 
-const loadingScreen = createLoadingScreen();
-
 async function loadSpritesheet(path) {{
     if (spritesheets[path]) return spritesheets[path];
     if (pendingLoads[path]) return pendingLoads[path];
@@ -572,7 +510,6 @@ async function loadSpritesheet(path) {{
             texture.magFilter = THREE.NearestFilter;
             spritesheets[path] = texture;
             delete pendingLoads[path];
-            loadingScreen.updateSheets(Object.keys(spritesheets).length);
             resolve(texture);
         }});
     }});
@@ -892,16 +829,11 @@ const delay = useInstantLoad ? 0 : 1;
     const totalImages = images.length;
 
     const updateCount = () => {{
-        loadingScreen.updateStacks(loadedStacks, totalStacks);
         const downColor = currentNode && currentNode.children.length > 0 ? '#4f4' : '#44f';
         const gridInfo = node.grid_layout ? ` [${{node.grid_layout}}]` : '';
         countDiv.innerHTML = `<span style="cursor:pointer;padding:0 5px;user-select:none;color:#f44" id="nav-up">&#60;</span> zoom: ${{randomZoom.toFixed(2)}}${{gridInfo}} | ${{loadedStacks}}/${{totalStacks}} stacks | ${{loadedImages}}/${{totalImages}} images <span style="cursor:pointer;padding:0 5px;user-select:none;color:${{downColor}}" id="nav-down">&#62;</span>`;
-        
-        if (loadedStacks === totalStacks) {{
-            loadingScreen.remove();
-        }}
     }};
- 
+
     updateCount();
 
     countDiv.addEventListener('click', (e) => {{
@@ -1440,17 +1372,12 @@ function findNodeByPath(node, targetPath) {{
 
 let currentNode = null;
 
-async function renderContent(node, skipUrlUpdate = false) {{
-
+async function renderContent(node) {{
 
     const RANDOM_TEXTDIV_POSITION = spriteConfig.random_textdiv_position;
     const SEED = spriteConfig.seed;
 
     currentNode = node;
-    if (!skipUrlUpdate) {{
-        setUrlFromNode(node);
-    }}
-
     updateTreeColors();
 
     activeScenes.forEach(disposeScene);
@@ -1621,11 +1548,7 @@ async function renderContent(node, skipUrlUpdate = false) {{
             
             const navLeft = div.querySelector('.text-nav-left');
             const navRight = div.querySelector('.text-nav-right');
-
-            if (children.every(child => child.ai.length === 0)) {{
-                loadingScreen.remove();
-            }}
- 
+            
             navLeft.onclick = () => {{
                 if (currentNode && currentNode.path) {{
                     const parentPath = currentNode.path.split('/').slice(0, -1).join('/');
@@ -1648,6 +1571,7 @@ async function renderContent(node, skipUrlUpdate = false) {{
 
         contentDiv.appendChild(div);
     }}
+return Promise.resolve();
 }}
 </script>
 </body>
