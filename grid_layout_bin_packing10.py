@@ -408,6 +408,18 @@ const materialCache = {{}};
 const geometryCache = {{}};
 
 
+function getNodeFromUrl() {{
+    const hash = window.location.hash.slice(1);
+    if (!hash) return null;
+    const path = decodeURIComponent(hash);
+    return findNodeByPath(dataTree, path);
+}}
+
+function setUrlFromNode(node) {{
+    window.location.hash = encodeURIComponent(node.path);
+}}
+
+
 
 function createLoadingScreen() {{
     const overlay = document.createElement('div');
@@ -454,8 +466,14 @@ fetch('data.json')
         dataTree = d.tree;
         spriteConfig = d.sprite_config;
         buildTree(dataTree, document.getElementById('tree'));
-        renderContent(dataTree); 
-
+        
+        const urlNode = getNodeFromUrl();
+        renderContent(urlNode || dataTree);
+        
+        window.addEventListener('hashchange', () => {{
+            const node = getNodeFromUrl();
+            if (node) renderContent(node, true);
+        }});
     }});
 
 function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
@@ -1407,12 +1425,17 @@ function findNodeByPath(node, targetPath) {{
 
 let currentNode = null;
 
-async function renderContent(node) {{
+async function renderContent(node, skipUrlUpdate = false) {{
+
 
     const RANDOM_TEXTDIV_POSITION = spriteConfig.random_textdiv_position;
     const SEED = spriteConfig.seed;
 
     currentNode = node;
+    if (!skipUrlUpdate) {{
+        setUrlFromNode(node);
+    }}
+
     updateTreeColors();
 
     activeScenes.forEach(disposeScene);
