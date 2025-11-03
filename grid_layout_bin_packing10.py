@@ -414,72 +414,15 @@ function seededRandom(seed) {{
     }}
 
 
-function getAllSpritesheetPaths(node, paths = new Set()) {{
-    node.ai.forEach(img => paths.add(img.ss));
-    node.oi.forEach(img => paths.add(img.ss));
-    node.children.forEach(child => getAllSpritesheetPaths(child, paths));
-    return Array.from(paths);
-}}
-
-async function preloadSpritesheets(paths) {{
-    const loadProgress = document.getElementById('load-progress');
-    let loaded = 0;
-    
-    const promises = paths.map(path => 
-        loadSpritesheet(path).then(() => {{
-            loaded++;
-            loadProgress.textContent = `${{loaded}}/${{paths.length}}`;
-        }})
-    );
-    
-    await Promise.all(promises);
-    
-    console.log('All spritesheets loaded, uploading to GPU...');
-    
-    const tempRenderer = new THREE.WebGLRenderer();
-    const tempScene = new THREE.Scene();
-    const tempCamera = new THREE.Camera();
-    const tempGeometry = new THREE.PlaneGeometry(1, 1);
-    
-    Object.values(spritesheets).forEach(texture => {{
-        const material = new THREE.MeshBasicMaterial({{ map: texture }});
-        const mesh = new THREE.Mesh(tempGeometry, material);
-        tempScene.add(mesh);
-    }});
-    
-    tempRenderer.render(tempScene, tempCamera);
-    
-    tempGeometry.dispose();
-    tempScene.children.forEach(mesh => mesh.material.dispose());
-    tempRenderer.dispose();
-    
-    console.log('GPU upload complete');
-}}
-
-
 fetch('data.json')
     .then(r => r.json())
-    .then(async d => {{
+    .then(d => {{
         dataTree = d.tree;
         spriteConfig = d.sprite_config;
-        
-        const loader = document.createElement('div');
-        loader.id = 'loader';
-        loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:monospace;font-size:14px;';
-        loader.innerHTML = '<div style="text-align:center;"><div id="load-text">loading spritesheets...</div><div id="load-progress">0/0</div></div>';
-        document.body.appendChild(loader);
-        
-        const paths = getAllSpritesheetPaths(dataTree);
-        document.getElementById('load-progress').textContent = `0/${{paths.length}}`;
-        await preloadSpritesheets(paths);
-        
-        loader.remove();
         buildTree(dataTree, document.getElementById('tree'));
+        renderContent(dataTree); 
+
     }});
-
-
-
-
 
 function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
     const connector = isLast ? '└── ' : '├── ';
@@ -550,35 +493,21 @@ function disposeScene(sceneData) {{
     if (sceneData.scene) sceneData.scene.clear();
 }}
 
-
-
-
-
-
-
-
-
-
 async function loadSpritesheet(path) {{
     if (spritesheets[path]) return spritesheets[path];
-    
-    return new Promise((resolve) => {{
+    if (pendingLoads[path]) return pendingLoads[path];
+    pendingLoads[path] = new Promise((resolve) => {{
         const loader = new THREE.TextureLoader();
         loader.load(path, (texture) => {{
             texture.minFilter = THREE.NearestFilter;
             texture.magFilter = THREE.NearestFilter;
             spritesheets[path] = texture;
+            delete pendingLoads[path];
             resolve(texture);
         }});
     }});
+    return pendingLoads[path];
 }}
-
-
-
-
-
-
-
 
 async function createThreeScene(container, images, node) {{
     const scene = new THREE.Scene();
