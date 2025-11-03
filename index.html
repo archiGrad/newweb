@@ -515,9 +515,37 @@ const delay = useInstantLoad ? 0 : 1;
 
     const stackLabels = [];
 
+    const loadStart = performance.now();
+console.log('[PRELOAD] Starting spritesheet preload');
 
+const loader = document.createElement('div');
+loader.innerHTML = `Loading spritesheets: 0/0`;
+loader.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;font-family:monospace;font-size:20px;z-index:1000';
+container.appendChild(loader);
+
+const uniqueSheets = [...new Set(images.map(i => i.ss))];
+console.log(`[PRELOAD] Total unique spritesheets: ${uniqueSheets.length}`);
+let loadedSheets = 0;
+await Promise.all(uniqueSheets.map(async (sheet) => {
+    const sheetStart = performance.now();
+    await loadSpritesheet(sheet);
+    loadedSheets++;
+    const sheetTime = (performance.now() - sheetStart).toFixed(2);
+    console.log(`[PRELOAD] Loaded ${sheet} in ${sheetTime}ms (${loadedSheets}/${uniqueSheets.length})`);
+    loader.innerHTML = `Loading spritesheets: ${loadedSheets}/${uniqueSheets.length}`;
+}));
+
+const loadEnd = performance.now();
+const totalTime = (loadEnd - loadStart).toFixed(2);
+console.log(`[PRELOAD] Complete in ${totalTime}ms`);
+loader.remove();
+
+const renderStart = performance.now();
+console.log('[RENDER] Starting mesh creation');
+
+    
     (async () => {
-        if (node.grid_layout) {
+    if (node.grid_layout) {
             for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {
                 const folderName = folders[stackIdx];
                 const stackImages = grouped[folderName];
@@ -1150,7 +1178,7 @@ async function renderContent(node) {
             
             //div.appendChild(textDiv);
             const imgDiv = document.createElement('div');
-            imgDiv.style.flex = '2';
+            imgDiv.style.flex = '1';
             imgDiv.style.position = 'relative';
             imgDiv.style.border = '1px solid white';
             imgDiv.style.overflow = 'hidden';

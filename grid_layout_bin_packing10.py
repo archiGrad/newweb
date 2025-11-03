@@ -3,12 +3,15 @@ import json
 from PIL import Image
 from natsort import natsorted
 
+# .stop_accom, .no_accum, .grid_layout
+
+
 SPRITESHEET_SIZE = 1024  * 4
 SPRITE_SIZE = 64
 SPRITE_PADDING = 0
 SPRITES_PER_ROW = SPRITESHEET_SIZE // SPRITE_SIZE
 SPRITES_PER_SHEET = SPRITES_PER_ROW * SPRITES_PER_ROW
-RESIZE_METHOD = Image.LANCZOS
+RESIZE_METHOD = Image.NEAREST   #use Image.NEAREST for nearest neigbour algo, Image.LANCZOS for smooth interpolation
 SPRITESHEET_FORMAT = 'webp'
 WEBP_QUALITY = 100
 WEBP_METHOD = 0
@@ -25,7 +28,7 @@ GAUSSIAN_BLUR_RADIUS = 2
 COLOR_TO_TRANSPARENT = 'blue'
 COLOR_THRESHOLD = 30
 
-DITHERING = False
+DITHERING = True
 DITHER_MODE = 'custom_palette'
 DITHER_METHOD = 'ordered'
 DITHER_COLORS = 256
@@ -34,8 +37,16 @@ CUSTOM_PALETTE = ['#000000', '#FF0000', '#00FF00']
 MAX_GIF_FRAMES = 30
 
 STACK_SPACING = 0.15
-ZOOM_SEED_MULTIPLIER = 293
+SEED = 293 # Master seed for deterministic randomization (zoom, layout, etc)
 QUICKLOAD_TRESHOLD= 293
+
+ORDERED_GRID_LAYOUT = True
+
+ROTATION_SPEED = 0.000015
+
+RANDOM_TEXTDIV_POSITION = False  # False = text always left, True = random based on seed
+
+
 
 def apply_filter(img):
     if SHARPEN:
@@ -148,10 +159,10 @@ def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'im
             grid_layout = grid_file.read_text().strip()
         
         no_accum_file = path / '.no_accum'
-        no_accum = no_accum_file.exists() or '__NOACCUM__' in path.name
+        no_accum = no_accum_file.exists()
         
         stop_accum_file = path / '.stop_accum'
-        stop_accum = stop_accum_file.exists() or '__STOPACCUM__' in path.name
+        stop_accum = stop_accum_file.exists()
             
         for item in natsorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name)):
             if item.name in ignore or item.name in ['.grid_layout', '.no_accum', '.stop_accum']:
@@ -170,8 +181,10 @@ def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'im
         all_texts = texts.copy()
         for child in children:
             all_images.extend(child['ai'])
-            if not child.get('na', False):
-                all_texts.extend(child['at'])
+            if not child.get('na', False) and not child.get('sa', False):  # check both flags
+                all_texts.extend(child['at'])        
+        
+
     
     content_type = 'empty'
     if all_images and all_texts:
@@ -302,8 +315,11 @@ sprite_config = {
     'sprite_padding': SPRITE_PADDING,
     'sprites_per_row': SPRITES_PER_ROW,
     'stack_spacing': STACK_SPACING,
-    'zoom_seed_multiplier': ZOOM_SEED_MULTIPLIER,
-    'quickload_threshold': QUICKLOAD_TRESHOLD
+    'seed': SEED,
+    'quickload_threshold': QUICKLOAD_TRESHOLD,
+    'ordered_grid_layout': ORDERED_GRID_LAYOUT,
+    'rotation_speed': ROTATION_SPEED,
+    'random_textdiv_position': RANDOM_TEXTDIV_POSITION
 }
 
 with open('data.json', 'w') as f:
@@ -390,6 +406,13 @@ const spritesheets = {{}};
 const pendingLoads = {{}};
 const materialCache = {{}};
 const geometryCache = {{}};
+
+function seededRandom(seed) {{
+        let state = seed;
+        state = (state * 1664525 + 1013904223) % 4294967296;
+        return state / 4294967296;
+    }}
+
 
 fetch('data.json')
     .then(r => r.json())
@@ -493,7 +516,9 @@ async function createThreeScene(container, images, node) {{
     const SPRITE_PADDING = spriteConfig.sprite_padding;
     const SPRITES_PER_ROW = spriteConfig.sprites_per_row;
     const STACK_SPACING = spriteConfig.stack_spacing;
-    const ZOOM_SEED_MULTIPLIER = spriteConfig.zoom_seed_multiplier;
+    const SEED = spriteConfig.seed;
+    const ORDERED_GRID_LAYOUT = spriteConfig.ordered_grid_layout;
+    const ROTATION_SPEED = spriteConfig.rotation_speed;
 
 const QUICKLOAD_THRESHOLD = spriteConfig.quickload_threshold;
 const useInstantLoad = images.length > QUICKLOAD_THRESHOLD;
@@ -528,10 +553,11 @@ const delay = useInstantLoad ? 0 : 1;
         gridGroups = [];
         const processedFolders = new Set();
         
+	 
         function collectGridChildren(n) {{
             if (n.grid_layout && n.ai.length > 0) {{
                 const childFolders = folders.filter(f => f.startsWith(n.path + '/') || f === n.path);
-                const [gCols, gRows] = n.grid_layout.split('x').map(Number);
+                const [gCols, gRows] = ORDERED_GRID_LAYOUT ? n.grid_layout.split('x').map(Number) : [1, 1];
                 gridGroups.push({{
                     folders: childFolders,
                     cols: gCols,
@@ -667,14 +693,9 @@ const delay = useInstantLoad ? 0 : 1;
     const margin = 15;
     const baseFrustumSize = maxDim + margin;
 
-    function seededRandom(seed) {{
-        let state = seed;
-        state = (state * 1664525 + 1013904223) % 4294967296;
-        return state / 4294967296;
-    }}
-
+    
     const seed = images.map(img => img.global_index).reduce((a, b) => a + b, 0);
-    const rand = seededRandom(seed * ZOOM_SEED_MULTIPLIER);
+    const rand = seededRandom(seed * SEED);  //this is a bit weird for sure
     const randomZoom = rand < 0.33 ? 0.1 : rand < 0.66 ? 1 : 0.1;
     const frustumSize = baseFrustumSize * randomZoom;
 
@@ -822,9 +843,37 @@ const delay = useInstantLoad ? 0 : 1;
 
     const stackLabels = [];
 
+    const loadStart = performance.now();
+console.log('[PRELOAD] Starting spritesheet preload');
 
+const loader = document.createElement('div');
+loader.innerHTML = `Loading spritesheets: 0/0`;
+loader.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;font-family:monospace;font-size:20px;z-index:1000';
+container.appendChild(loader);
+
+const uniqueSheets = [...new Set(images.map(i => i.ss))];
+console.log(`[PRELOAD] Total unique spritesheets: ${{uniqueSheets.length}}`);
+let loadedSheets = 0;
+await Promise.all(uniqueSheets.map(async (sheet) => {{
+    const sheetStart = performance.now();
+    await loadSpritesheet(sheet);
+    loadedSheets++;
+    const sheetTime = (performance.now() - sheetStart).toFixed(2);
+    console.log(`[PRELOAD] Loaded ${{sheet}} in ${{sheetTime}}ms (${{loadedSheets}}/${{uniqueSheets.length}})`);
+    loader.innerHTML = `Loading spritesheets: ${{loadedSheets}}/${{uniqueSheets.length}}`;
+}}));
+
+const loadEnd = performance.now();
+const totalTime = (loadEnd - loadStart).toFixed(2);
+console.log(`[PRELOAD] Complete in ${{totalTime}}ms`);
+loader.remove();
+
+const renderStart = performance.now();
+console.log('[RENDER] Starting mesh creation');
+
+    
     (async () => {{
-        if (node.grid_layout) {{
+    if (node.grid_layout) {{
             for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {{
                 const folderName = folders[stackIdx];
                 const stackImages = grouped[folderName];
@@ -1286,7 +1335,7 @@ const delay = useInstantLoad ? 0 : 1;
         stats.begin();
         sceneData.animationId = requestAnimationFrame(animate);
         controls.update();
-        const rotationAngle = Date.now() * 0.0001;
+        const rotationAngle = Date.now() * ROTATION_SPEED;
         scene.rotation.y = rotationAngle;
         
         if (frameCount % 10 === 0) {{
@@ -1343,6 +1392,10 @@ function findNodeByPath(node, targetPath) {{
 let currentNode = null;
 
 async function renderContent(node) {{
+
+    const RANDOM_TEXTDIV_POSITION = spriteConfig.random_textdiv_position;
+    const SEED = spriteConfig.seed;
+
     currentNode = node;
     updateTreeColors();
 
@@ -1407,6 +1460,7 @@ async function renderContent(node) {{
 
         div.appendChild(label);
 
+
         if (child.ai.length > 0 && child.at.length > 0) {{
             div.style.display = 'flex';
             div.style.flexDirection = 'row';
@@ -1450,13 +1504,29 @@ async function renderContent(node) {{
                 }}
             }};
             
-            div.appendChild(textDiv);
+            //div.appendChild(textDiv);
             const imgDiv = document.createElement('div');
             imgDiv.style.flex = '1';
             imgDiv.style.position = 'relative';
             imgDiv.style.border = '1px solid white';
             imgDiv.style.overflow = 'hidden';
-            div.appendChild(imgDiv);
+            //div.appendChild(imgDiv);
+
+           if (RANDOM_TEXTDIV_POSITION) {{
+               const seed = child.path.split('').reduce((a, c) => a + c.charCodeAt(0), 0) * SEED;
+               const rand = seededRandom(seed);
+               if (rand < 0.5) {{
+                   div.appendChild(textDiv);
+                   div.appendChild(imgDiv);
+               }} else {{
+                   div.appendChild(imgDiv);
+                   div.appendChild(textDiv);
+               }}
+           }} else {{
+               div.appendChild(textDiv);
+               div.appendChild(imgDiv);
+           }} 
+
             setTimeout(() => createThreeScene(imgDiv, child.ai, child), 0);
 
         }} else if (child.ai.length > 0) {{

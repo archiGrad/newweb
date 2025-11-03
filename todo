@@ -19,7 +19,6 @@ show in the treeview where the .stop_accum files ar red dot?
 zoom levels adjust , + also i dont think they are influenced by boundingbox
 need to optimize again, i think i have too many listeners overloading memory
 fix the scrollbars, looks stupid
-coment out helpers
 
 the bottons < and > bottom right does not work anymore
 when i have .accum file containing a number, this is the number i would like the text to be visible in the parent  reversed. 
@@ -31,6 +30,9 @@ little loading screen on startup loading in textures
 
 
 foldable tree view with correct loading on click, no double loeading when expanding or collapsing the tree. 🔥 ⭐⭐ text underneath tree?, tree in the middle of screen?  🔥 ⭐ floating and collapsible tree view. ⭐⭐⭐
+
+loading screen
+startup screen
 
 have custom url links so i can send people the exact scene i want 🔥🔥🔥🔥 🔥⭐⭐⭐
 open website on random folder
@@ -48,6 +50,7 @@ make a mobile version
 
 
 in progress-------------------------
+coment out helpers
 
 text no accum in mid folder, if found, no div
 switch orientation of the text/3d layer. left-right, now always the same
