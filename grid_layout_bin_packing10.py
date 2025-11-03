@@ -475,6 +475,21 @@ fetch('data.json')
             if (node) renderContent(node, true);
         }});
     }});
+fetch('data.json')
+    .then(r => r.json())
+    .then(d => {{
+        dataTree = d.tree;
+        spriteConfig = d.sprite_config;
+        buildTree(dataTree, document.getElementById('tree'));
+        
+        const urlNode = getNodeFromUrl();
+        renderContent(urlNode || dataTree);
+        
+        window.addEventListener('hashchange', () => {{
+            const node = getNodeFromUrl();
+            if (node) renderContent(node, true);
+        }});
+    }});
 
 function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
     const connector = isLast ? '└── ' : '├── ';
@@ -1606,7 +1621,11 @@ async function renderContent(node, skipUrlUpdate = false) {{
             
             const navLeft = div.querySelector('.text-nav-left');
             const navRight = div.querySelector('.text-nav-right');
-            
+
+            if (children.every(child => child.ai.length === 0)) {{
+                loadingScreen.remove();
+            }}
+ 
             navLeft.onclick = () => {{
                 if (currentNode && currentNode.path) {{
                     const parentPath = currentNode.path.split('/').slice(0, -1).join('/');
