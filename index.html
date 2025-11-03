@@ -79,6 +79,26 @@ const pendingLoads = {};
 const materialCache = {};
 const geometryCache = {};
 
+
+function updateURL(node) {
+    const path = node.path || '';
+    history.pushState(null, '', '?path=' + encodeURIComponent(path));
+}
+
+function loadFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const path = params.get('path');
+    if (path) {
+        const node = findNodeByPath(dataTree, path);
+        if (node) {
+            renderContent(node);
+            return true;
+        }
+    }
+    return false;
+}
+
+
 function seededRandom(seed) {
         let state = seed;
         state = (state * 1664525 + 1013904223) % 4294967296;
@@ -104,6 +124,7 @@ fetch('data.json')
             });
         }
     });
+
 
 function buildTree(node, container, depth = 0, isLast = true, prefix = '') {
     const connector = isLast ? '└── ' : '├── ';
@@ -1035,22 +1056,13 @@ async function loadText(path) {
     return await res.text();
 }
 
-function updateURL(node) {
-    const path = node.path || '';
-    history.pushState(null, '', '?path=' + encodeURIComponent(path));
-}
-
-function loadFromURL() {
-    const params = new URLSearchParams(window.location.search);
-    const path = params.get('path');
-    if (path) {
-        const node = findNodeByPath(dataTree, path);
-        if (node) {
-            renderContent(node);
-            return true;
-        }
+function findNodeByPath(node, targetPath) {
+    if (node.path === targetPath || node.name === targetPath) return node;
+    for (const child of node.children) {
+        const found = findNodeByPath(child, targetPath);
+        if (found) return found;
     }
-    return false;
+    return null;
 }
 
 let currentNode = null;
