@@ -86,13 +86,46 @@ function seededRandom(seed) {
     }
 
 
+
+let allSpritesheets = [];
+
 fetch('data.json')
     .then(r => r.json())
     .then(d => {
         dataTree = d.tree;
         spriteConfig = d.sprite_config;
-        buildTree(dataTree, document.getElementById('tree'));
+        
+        const loadScreen = document.createElement('div');
+        loadScreen.id = 'global-loader';
+        loadScreen.innerHTML = 'Loading spritesheets: 0/0';
+        loadScreen.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:black;color:white;display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:20px;z-index:10000';
+        document.body.appendChild(loadScreen);
+        
+        function collectAllSpritesheets(node) {
+            node.ai.forEach(img => {
+                if (!allSpritesheets.includes(img.ss)) {
+                    allSpritesheets.push(img.ss);
+                }
+            });
+            node.children.forEach(child => collectAllSpritesheets(child));
+        }
+        
+        collectAllSpritesheets(dataTree);
+        console.log(`[GLOBAL] Preloading ${allSpritesheets.length} spritesheets`);
+        
+        let loaded = 0;
+        Promise.all(allSpritesheets.map(async (sheet) => {
+            await loadSpritesheet(sheet);
+            loaded++;
+            loadScreen.innerHTML = `Loading spritesheets: ${loaded}/${allSpritesheets.length}`;
+        })).then(() => {
+            console.log('[GLOBAL] All spritesheets loaded');
+            loadScreen.remove();
+            buildTree(dataTree, document.getElementById('tree'));
+        });
     });
+
+
 
 function buildTree(node, container, depth = 0, isLast = true, prefix = '') {
     const connector = isLast ? '└── ' : '├── ';
@@ -515,37 +548,9 @@ const delay = useInstantLoad ? 0 : 1;
 
     const stackLabels = [];
 
-    const loadStart = performance.now();
-console.log('[PRELOAD] Starting spritesheet preload');
 
-const loader = document.createElement('div');
-loader.innerHTML = `Loading spritesheets: 0/0`;
-loader.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;font-family:monospace;font-size:20px;z-index:1000';
-container.appendChild(loader);
-
-const uniqueSheets = [...new Set(images.map(i => i.ss))];
-console.log(`[PRELOAD] Total unique spritesheets: ${uniqueSheets.length}`);
-let loadedSheets = 0;
-await Promise.all(uniqueSheets.map(async (sheet) => {
-    const sheetStart = performance.now();
-    await loadSpritesheet(sheet);
-    loadedSheets++;
-    const sheetTime = (performance.now() - sheetStart).toFixed(2);
-    console.log(`[PRELOAD] Loaded ${sheet} in ${sheetTime}ms (${loadedSheets}/${uniqueSheets.length})`);
-    loader.innerHTML = `Loading spritesheets: ${loadedSheets}/${uniqueSheets.length}`;
-}));
-
-const loadEnd = performance.now();
-const totalTime = (loadEnd - loadStart).toFixed(2);
-console.log(`[PRELOAD] Complete in ${totalTime}ms`);
-loader.remove();
-
-const renderStart = performance.now();
-console.log('[RENDER] Starting mesh creation');
-
-    
     (async () => {
-    if (node.grid_layout) {
+        if (node.grid_layout) {
             for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {
                 const folderName = folders[stackIdx];
                 const stackImages = grouped[folderName];
@@ -556,7 +561,7 @@ console.log('[RENDER] Starting mesh creation');
 
                 for (let i = 0; i < stackImages.length; i++) {
                     const imgData = stackImages[i];
-                    const texture = await loadSpritesheet(imgData.ss);
+                    const texture = spritesheets[imgData.ss];
                     if (!materialCache[imgData.ss]) {
                         materialCache[imgData.ss] = new THREE.MeshBasicMaterial({
                             map: texture,
@@ -702,7 +707,7 @@ console.log('[RENDER] Starting mesh creation');
 
                     for (let i = 0; i < stackImages.length; i++) {
                         const imgData = stackImages[i];
-                        const texture = await loadSpritesheet(imgData.ss);
+                        const texture = spritesheets[imgData.ss];
                         if (!materialCache[imgData.ss]) {
                             materialCache[imgData.ss] = new THREE.MeshBasicMaterial({
                                 map: texture,
@@ -848,7 +853,7 @@ console.log('[RENDER] Starting mesh creation');
 
                 for (let i = 0; i < stackImages.length; i++) {
                     const imgData = stackImages[i];
-                    const texture = await loadSpritesheet(imgData.ss);
+                    const texture = spritesheets[imgData.ss];
                     if (!materialCache[imgData.ss]) {
                         materialCache[imgData.ss] = new THREE.MeshBasicMaterial({
                             map: texture,
