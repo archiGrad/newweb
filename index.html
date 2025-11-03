@@ -79,6 +79,40 @@ const pendingLoads = {};
 const materialCache = {};
 const geometryCache = {};
 
+
+
+function createLoadingScreen() {
+    const overlay = document.createElement('div');
+    overlay.id = 'loading-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:11px;z-index:9999;';
+    
+    const content = document.createElement('div');
+    content.id = 'loading-content';
+    content.innerHTML = 'loading spritesheets: 0<br>loading stacks: 0/0';
+    
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+    
+    return {
+        updateSheets: (count) => {
+            const lines = content.innerHTML.split('<br>');
+            lines[0] = `loading spritesheets: ${count}`;
+            content.innerHTML = lines.join('<br>');
+        },
+        updateStacks: (loaded, total) => {
+            const lines = content.innerHTML.split('<br>');
+            lines[1] = `loading stacks: ${loaded}/${total}`;
+            content.innerHTML = lines.join('<br>');
+        },
+        remove: () => {
+            overlay.remove();
+        }
+    };
+}
+
+
+
+
 function seededRandom(seed) {
         let state = seed;
         state = (state * 1664525 + 1013904223) % 4294967296;
@@ -165,6 +199,8 @@ function disposeScene(sceneData) {
     if (sceneData.scene) sceneData.scene.clear();
 }
 
+const loadingScreen = createLoadingScreen();
+
 async function loadSpritesheet(path) {
     if (spritesheets[path]) return spritesheets[path];
     if (pendingLoads[path]) return pendingLoads[path];
@@ -175,6 +211,7 @@ async function loadSpritesheet(path) {
             texture.magFilter = THREE.NearestFilter;
             spritesheets[path] = texture;
             delete pendingLoads[path];
+            loadingScreen.updateSheets(Object.keys(spritesheets).length);
             resolve(texture);
         });
     });
@@ -494,11 +531,16 @@ const delay = useInstantLoad ? 0 : 1;
     const totalImages = images.length;
 
     const updateCount = () => {
+        loadingScreen.updateStacks(loadedStacks, totalStacks);
         const downColor = currentNode && currentNode.children.length > 0 ? '#4f4' : '#44f';
         const gridInfo = node.grid_layout ? ` [${node.grid_layout}]` : '';
         countDiv.innerHTML = `<span style="cursor:pointer;padding:0 5px;user-select:none;color:#f44" id="nav-up">&#60;</span> zoom: ${randomZoom.toFixed(2)}${gridInfo} | ${loadedStacks}/${totalStacks} stacks | ${loadedImages}/${totalImages} images <span style="cursor:pointer;padding:0 5px;user-select:none;color:${downColor}" id="nav-down">&#62;</span>`;
+        
+        if (loadedStacks === totalStacks) {
+            loadingScreen.remove();
+        }
     };
-
+ 
     updateCount();
 
     countDiv.addEventListener('click', (e) => {
