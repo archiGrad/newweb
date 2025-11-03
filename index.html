@@ -79,32 +79,17 @@ const pendingLoads = {};
 const materialCache = {};
 const geometryCache = {};
 
-
-function updateURL(node) {
-    const path = node.path || '';
-    history.pushState(null, '', '?path=' + encodeURIComponent(path));
-}
-
-function loadFromURL() {
-    const params = new URLSearchParams(window.location.search);
-    const path = params.get('path');
-    if (path) {
-        const node = findNodeByPath(dataTree, path);
-        if (node) {
-            renderContent(node);
-            return true;
-        }
-    }
-    return false;
-}
-
-
 function seededRandom(seed) {
         let state = seed;
         state = (state * 1664525 + 1013904223) % 4294967296;
         return state / 4294967296;
     }
 
+
+function updateURL(node) {
+    const path = node.path || '';
+    history.pushState(null, '', '?path=' + encodeURIComponent(path));
+}
 
 fetch('data.json')
     .then(r => r.json())
@@ -113,16 +98,18 @@ fetch('data.json')
         spriteConfig = d.sprite_config;
         buildTree(dataTree, document.getElementById('tree'));
         
-        if (!loadFromURL()) {
-            const loader = document.createElement('div');
-            loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:monospace;';
-            loader.textContent = 'loading...';
-            document.body.appendChild(loader);
-            
-            renderContent(dataTree).then(() => {
-                loader.remove();
-            });
-        }
+        const loader = document.createElement('div');
+        loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:monospace;';
+        loader.textContent = 'loading...';
+        document.body.appendChild(loader);
+        
+        const params = new URLSearchParams(window.location.search);
+        const path = params.get('path');
+        const node = path ? findNodeByPath(dataTree, path) : null;
+        
+        renderContent(node || dataTree).then(() => {
+            loader.remove();
+        });
     });
 
 
