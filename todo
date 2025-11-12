@@ -1,17 +1,63 @@
+I got 10 800 euro
++ 35 000 euro from argenta
++- 45000 euroes in the bank
 
-website
+--------------------------------------------------------
+get your fucking shit togeter man, you ar enot like that. go to the hairdresser, 
+get some damn nice clothes, what the fuck is wrong with you. be a decent person, 
+you have let yourself go fully, what the fuck is wrong with you. 
+be a decent person, you have let yourself go fully, what the fuck is wrong with you. 
+you absolute idiot, GET YOUR FUCKING SHIT TOGETHER
+live in a clean house, have some respect for yourself
+luck will not come to you iof you are not willing to work for it.
+--------------------------------------------------------
+
+
+
+-----
+this week:
+hairdresser
+respond to kevin, tjorven, hadin
+nice clothes
+businesscards  https://www.tanabutr.co.th/en/print-on-demand-bangkok/business-card/premium-paper
+website + first projects processed and uploaded
+get a fucking job and apartment back in europm choose a place and try
+---------
+
+
+
+when the website isfinished, 
+wednseday, thursday, friday, saturday, sunday
+
+apply to iaac, madrid, rmit, mit everywhere 
+
+
+
+
+adjustable spritesheet maps
+post processing files for every folder. 
+annotations on lowest level.
+
+
+
+
 
 urgency  🔥
 ease of implementation ⭐
 
-
-
-
-add my comment sback in global vars
-
-
+ui
 zoom, tooslow
+fix scrollbars
+slidable divs
 not 50% text width? too much?
+
+navigation
+add my comment back in global vars
+when going to custom url, i need to go back and forth. not supported now
+
+add support for multi stack ganimated grifs
+
+in loading screen, add performnt images load and spritesheets and stacks
 
 
 show in the treeview where the .stop_accum files ar red dot?
@@ -20,27 +66,23 @@ zoom levels adjust , + also i dont think they are influenced by boundingbox
 need to optimize again, i think i have too many listeners overloading memory
 fix the scrollbars, looks stupid
 
+
+bugs:
+ tags at bottom of texts moves when i scroll.......
 the bottons < and > bottom right does not work anymore
-
-
-text   tags at bottom of texts moves when i scroll.......
-
-in loading screen, add performnt images load and spritesheets and stacks
 
 foldable tree view with correct loading on click, no double loeading when expanding or collapsing the tree. 🔥 ⭐⭐ text underneath tree?, tree in the middle of screen?  🔥 ⭐ floating and collapsible tree view. ⭐⭐⭐
 
 bigger font for important stuff
-
-
-
 seperate styling in index 🔥  
 reconsider different packing alforithm for 2d packing
-
 make it browser comaptible. chromium works ok, firefor and safari needs testin
+	scroll buttons
+
 make a mobile version
+a lot of work, ventralize the the treeview
 
-
-
+make 3d auto gif maker houdini setup
 
 
 in progress-------------------------
