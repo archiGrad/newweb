@@ -55,7 +55,6 @@ navigation
 add my comment back in global vars
 when going to custom url, i need to go back and forth. not supported now
 
-add support for multi stack ganimated grifs
 
 in loading screen, add performnt images load and spritesheets and stacks
 
@@ -82,10 +81,11 @@ make it browser comaptible. chromium works ok, firefor and safari needs testin
 make a mobile version
 a lot of work, ventralize the the treeview
 
-make 3d auto gif maker houdini setup
 
 
 in progress-------------------------
+make 3d auto gif maker houdini setup
+add support for multi stack ganimated grifs
 little loading screen on startup loading in textures
 when i have .accum file containing a number, this is the number i would like the text to be visible in the parent  reversed. 
 open website on random folder

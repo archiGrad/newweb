@@ -7,11 +7,11 @@ from natsort import natsorted
 
 
 SPRITESHEET_SIZE = 1024  * 4
-SPRITE_SIZE = 128
+SPRITE_SIZE = 256
 SPRITE_PADDING = 0
 SPRITES_PER_ROW = SPRITESHEET_SIZE // SPRITE_SIZE
 SPRITES_PER_SHEET = SPRITES_PER_ROW * SPRITES_PER_ROW
-RESIZE_METHOD = Image.NEAREST   #use Image.NEAREST for nearest neigbour algo, Image.LANCZOS for smooth interpolation
+RESIZE_METHOD = Image.LANCZOS   #use Image.NEAREST for nearest neigbour algo, Image.LANCZOS for smooth interpolation
 SPRITESHEET_FORMAT = 'webp'
 WEBP_QUALITY = 100
 WEBP_METHOD = 0
@@ -28,7 +28,7 @@ GAUSSIAN_BLUR_RADIUS = 2
 COLOR_TO_TRANSPARENT = 'blue'
 COLOR_THRESHOLD = 30
 
-DITHERING = False
+DITHERING = True
 DITHER_MODE = 'custom_palette'
 DITHER_METHOD = 'ordered'
 DITHER_COLORS = 256

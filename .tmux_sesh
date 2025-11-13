@@ -1,0 +1,10 @@
+#!/bin/bash
+tmux new-session -d -s website -n code -c ~/Documents/archiGrad/newweb/
+tmux new-window -t website -n gen -c ~/Documents/archiGrad/newweb/
+tmux send-keys -t website:gen 'source venv/bin/activate' C-m
+tmux new-window -t website -n server -c ~/Documents/archiGrad/newweb/
+tmux new-window -t website -n todo -c ~/Documents/archiGrad/newweb/
+tmux new-window -t website -n houdini -c ~/Documents/archiGrad/newweb/
+tmux new-window -t website -n shell -c ~/Documents/archiGrad/newweb/
+tmux select-window -t website:code
+tmux attach -t website
