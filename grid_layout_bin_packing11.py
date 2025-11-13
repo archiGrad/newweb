@@ -429,8 +429,11 @@ function updateURL(node) {{
 }}
 
 
+
+
 function updateLoader() {{
     if (!loaderElement) return;
+    console.log('updateLoader called:', loadedSpritesheets, totalSpritesheets, loadedStacks, totalStacks, loadedImages, totalImages);
     loaderElement.innerHTML = `
         loading...<br>
         spritesheets: ${{loadedSpritesheets}}/${{totalSpritesheets}}<br>
@@ -438,6 +441,7 @@ function updateLoader() {{
         images: ${{loadedImages}}/${{totalImages}}
     `;
 }}
+
 
 function calculateTotals(node) {{
     const spritesheets = new Set();
@@ -462,7 +466,6 @@ function calculateTotals(node) {{
 
 
 
-
 fetch('data.json')
     .then(r => r.json())
     .then(async d => {{
@@ -472,26 +475,33 @@ fetch('data.json')
         
         const totals = calculateTotals(dataTree);
         totalSpritesheets = totals.spritesheets;
+        totalStacks = totals.stacks;
+        totalImages = totals.images;
         
         loaderElement = document.createElement('div');
         loaderElement.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:monospace;text-align:center;';
         document.body.appendChild(loaderElement);
         updateLoader();
         
-        await renderContent(dataTree);
-        isInitialLoad = false;
+        loadedSpritesheets = 0;
+        loadedStacks = 0;
+        loadedImages = 0;
         
-        loaderElement.remove();
-        loaderElement = null;
+        console.log('Starting renderContent');
+        await renderContent(dataTree);
+        console.log('renderContent completed');
+        isInitialLoad = false;
         
         const hash = window.location.hash.slice(2);
         if (hash) {{
             const node = findNodeByPath(dataTree, decodeURIComponent(hash));
             if (node) await renderContent(node);
         }}
+        
+        loaderElement.remove();
+        console.log('Loader removed');
+        loaderElement = null;
     }});
-
-
 
 
 
@@ -575,7 +585,6 @@ function disposeScene(sceneData) {{
 }}
 
 
-
 async function loadSpritesheet(path) {{
     if (spritesheets[path]) return spritesheets[path];
     if (pendingLoads[path]) return pendingLoads[path];
@@ -587,6 +596,7 @@ async function loadSpritesheet(path) {{
             spritesheets[path] = texture;
             delete pendingLoads[path];
             loadedSpritesheets++;
+            console.log('Spritesheet loaded:', loadedSpritesheets, '/', totalSpritesheets);
             if (loaderElement) updateLoader();
             resolve(texture);
         }});
@@ -929,10 +939,17 @@ const delay = useInstantLoad ? 0 : 1;
 
     const stackLabels = [];
 
-
-    (async () => {{
+     await (async () => {{
+        console.log('IIFE started, processing', folders.length, 'folders');
+        console.log('IIFE started, processing', folders.length, 'folders');
+        console.log('node.grid_layout:', node.grid_layout);
+        console.log('gridGroups length:', gridGroups ? gridGroups.length : 'null');
         if (node.grid_layout) {{
+            console.log('ENTERING node.grid_layout branch');
+
+            console.log('Using node.grid_layout path, folders:', folders.length);
             for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {{
+                console.log('Processing stack', stackIdx, 'of', folders.length);
                 const folderName = folders[stackIdx];
                 const stackImages = grouped[folderName];
                 const row = Math.floor(stackIdx / cols);
@@ -941,6 +958,7 @@ const delay = useInstantLoad ? 0 : 1;
                 const zPos = row * spacing - offsetZ;
 
                 for (let i = 0; i < stackImages.length; i++) {{
+                    console.log('Loading image', i, 'of', stackImages.length, 'in stack', stackIdx);
                     const imgData = stackImages[i];
                     const texture = await loadSpritesheet(imgData.ss);
                     if (!materialCache[imgData.ss]) {{
@@ -1007,11 +1025,14 @@ const delay = useInstantLoad ? 0 : 1;
                     scene.add(mesh);
                     loadedImages++;
                     updateCount();
+                    updateLoader();
+
                     if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
 
                 }}
 
                 loadedStacks++;
+                console.log('Stack loaded:', loadedStacks, '/', totalStacks);
                 updateCount();
                 updateLoader();
 
@@ -1079,10 +1100,18 @@ const delay = useInstantLoad ? 0 : 1;
                 }});
             }}
         }} else if (gridGroups && gridGroups.length > 0) {{
+             console.log('ENTERING gridGroups branch');
+console.log('ENTERING gridGroups branch');
+console.log('gridGroups:', gridGroups);
             for (const group of gridGroups) {{
+    console.log('Processing group:', group.path, 'folders:', group.folders.length);
+
                 for (let localIdx = 0; localIdx < group.folders.length; localIdx++) {{
-                    const folderName = group.folders[localIdx];
-                    const stackImages = grouped[folderName];
+console.log('Processing localIdx:', localIdx, 'of', group.folders.length);
+        const folderName = group.folders[localIdx];
+        console.log('folderName:', folderName);
+        const stackImages = grouped[folderName];
+        console.log('stackImages:', stackImages ? stackImages.length : 'undefined');
                     const row = Math.floor(localIdx / group.cols);
                     const col = localIdx % group.cols;
                     const xPos = (group.gridX + col) * spacing - offsetX;
@@ -1155,11 +1184,15 @@ const delay = useInstantLoad ? 0 : 1;
                         scene.add(mesh);
                         loadedImages++;
                         updateCount();
+                        updateLoader();
+
                         if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
 
                     }}
 
                     loadedStacks++;
+                    console.log('Stack loaded:', loadedStacks, '/', totalStacks);
+
                     updateCount();
                     updateLoader();
 
@@ -1228,15 +1261,21 @@ const delay = useInstantLoad ? 0 : 1;
                 }}
             }}
         }} else {{
+            console.log('ENTERING default else branch');
+
             for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {{
                 const folderName = folders[stackIdx];
                 const stackImages = grouped[folderName];
+console.log('stackImages:', stackImages ? stackImages.length : 'undefined');
+
                 const row = Math.floor(stackIdx / cols);
                 const col = stackIdx % cols;
                 const xPos = col * spacing - offsetX;
                 const zPos = row * spacing - offsetZ;
 
                 for (let i = 0; i < stackImages.length; i++) {{
+    console.log('Processing image', i, 'of', stackImages.length);
+
                     const imgData = stackImages[i];
                     const texture = await loadSpritesheet(imgData.ss);
                     if (!materialCache[imgData.ss]) {{
@@ -1303,11 +1342,15 @@ const delay = useInstantLoad ? 0 : 1;
                     scene.add(mesh);
                     loadedImages++;
                     updateCount();
+                    updateLoader();
+
                     if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
 
                 }}
 
                 loadedStacks++;
+                console.log('Image loaded:', loadedImages, '/', totalImages);
+
                 updateCount();
                 updateLoader();
 
@@ -1375,6 +1418,7 @@ const delay = useInstantLoad ? 0 : 1;
                 }});
             }}
         }}
+        console.log('IIFE completed');
     }})();
 
     const stats = new Stats();
@@ -1458,6 +1502,8 @@ let currentNode = null;
 let isInitialLoad = true;
 
 async function renderContent(node) {{
+    loadedStacks = 0;
+    loadedImages = 0;
     if (!isInitialLoad) {{
         updateURL(node);
     }}
