@@ -30,10 +30,10 @@ wednseday, thursday, friday, saturday, sunday
 apply to iaac, madrid, rmit, mit everywhere 
 
 
-
+--------
 
 adjustable spritesheet maps
-post processing files for every folder. 
+post processing files for every folder. this means dot files for some stuff for custom processing
 annotations on lowest level.
 gif animation needs to be custom, not all same speed
 
@@ -51,7 +51,6 @@ not 50% text width? too much?
 
 navigation
 add my comment back in global vars
-when going to custom url, i need to go back and forth. not supported now
 
 
 in loading screen, add performnt images load and spritesheets and stacks
@@ -81,7 +80,11 @@ a lot of work, ventralize the the treeview
 
 
 
+
+
+
 in progress-------------------------
+when going to custom url, i need to go back and forth. not supported now
 make 3d auto gif maker houdini setup
 add support for multi stack ganimated grifs
 little loading screen on startup loading in textures
