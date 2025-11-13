@@ -7,7 +7,7 @@ from natsort import natsorted
 
 
 SPRITESHEET_SIZE = 1024  * 4
-SPRITE_SIZE = 256
+SPRITE_SIZE = 128
 SPRITE_PADDING = 0
 SPRITES_PER_ROW = SPRITESHEET_SIZE // SPRITE_SIZE
 SPRITES_PER_SHEET = SPRITES_PER_ROW * SPRITES_PER_ROW
@@ -28,7 +28,7 @@ GAUSSIAN_BLUR_RADIUS = 2
 COLOR_TO_TRANSPARENT = 'blue'
 COLOR_THRESHOLD = 30
 
-DITHERING = True
+DITHERING = False
 DITHER_MODE = 'custom_palette'
 DITHER_METHOD = 'ordered'
 DITHER_COLORS = 256
@@ -420,9 +420,10 @@ function updateURL(node) {{
 }}
 
 
+
 fetch('data.json')
     .then(r => r.json())
-    .then(d => {{
+    .then(async d => {{
         dataTree = d.tree;
         spriteConfig = d.sprite_config;
         buildTree(dataTree, document.getElementById('tree'));
@@ -432,19 +433,26 @@ fetch('data.json')
         loader.textContent = 'loading...';
         document.body.appendChild(loader);
         
-        const hash = window.location.hash.slice(2);
-        const node = hash ? findNodeByPath(dataTree, hash) : null;
+        await renderContent(dataTree);
+        isInitialLoad = false;
         
-        renderContent(node || dataTree).then(() => {{
-            loader.remove();
-        }});
+        const hash = window.location.hash.slice(2);
+        
+if (hash) {{
+    const node = findNodeByPath(dataTree, decodeURIComponent(hash));
+    console.log('Hash node found:', node);
+    if (node) await renderContent(node);
+}}
+        
+        loader.remove();
     }});
 
 window.addEventListener('hashchange', () => {{
     const hash = window.location.hash.slice(2);
-    const node = hash ? findNodeByPath(dataTree, hash) : dataTree;
+    const node = hash ? findNodeByPath(dataTree, decodeURIComponent(hash)) : dataTree;
     if (node) renderContent(node);
 }});
+
 
 
 function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
@@ -1388,8 +1396,12 @@ function findNodeByPath(node, targetPath) {{
 
 let currentNode = null;
 
+let isInitialLoad = true;
+
 async function renderContent(node) {{
-    updateURL(node);
+    if (!isInitialLoad) {{
+        updateURL(node);
+    }}
 
     const RANDOM_TEXTDIV_POSITION = spriteConfig.random_textdiv_position;
     const SEED = spriteConfig.seed;
@@ -1401,6 +1413,8 @@ async function renderContent(node) {{
     activeScenes = [];
     const contentDiv = document.getElementById('content');
     contentDiv.innerHTML = '';
+    
+    await new Promise(resolve => setTimeout(resolve, 0));
     
     console.log('=== renderContent DEBUG ===');
     console.log('node:', node);
