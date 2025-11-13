@@ -416,8 +416,9 @@ function seededRandom(seed) {{
 
 function updateURL(node) {{
     const path = node.path || '';
-    history.pushState(null, '', '?path=' + encodeURIComponent(path));
+    history.pushState(null, '', '#/' + path);
 }}
+
 
 fetch('data.json')
     .then(r => r.json())
@@ -431,14 +432,19 @@ fetch('data.json')
         loader.textContent = 'loading...';
         document.body.appendChild(loader);
         
-        const params = new URLSearchParams(window.location.search);
-        const path = params.get('path');
-        const node = path ? findNodeByPath(dataTree, path) : null;
+        const hash = window.location.hash.slice(2);
+        const node = hash ? findNodeByPath(dataTree, hash) : null;
         
         renderContent(node || dataTree).then(() => {{
             loader.remove();
         }});
     }});
+
+window.addEventListener('hashchange', () => {{
+    const hash = window.location.hash.slice(2);
+    const node = hash ? findNodeByPath(dataTree, hash) : dataTree;
+    if (node) renderContent(node);
+}});
 
 
 function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
