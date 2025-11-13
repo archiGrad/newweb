@@ -402,6 +402,15 @@ import {{ OrbitControls }} from 'three/addons/controls/OrbitControls.js';
 let dataTree;
 let spriteConfig;
 let activeScenes = [];
+let loadedSpritesheets = 0;
+let totalSpritesheets = 0;
+let loaderElement = null;
+
+let loadedStacks = 0;
+let totalStacks = 0;
+let loadedImages = 0;
+let totalImages = 0;
+
 const spritesheets = {{}};
 const pendingLoads = {{}};
 const materialCache = {{}};
@@ -420,6 +429,39 @@ function updateURL(node) {{
 }}
 
 
+function updateLoader() {{
+    if (!loaderElement) return;
+    loaderElement.innerHTML = `
+        loading...<br>
+        spritesheets: ${{loadedSpritesheets}}/${{totalSpritesheets}}<br>
+        stacks: ${{loadedStacks}}/${{totalStacks}}<br>
+        images: ${{loadedImages}}/${{totalImages}}
+    `;
+}}
+
+function calculateTotals(node) {{
+    const spritesheets = new Set();
+    let stacks = 0;
+    let images = 0;
+    
+    function traverse(n) {{
+        if (n.oi && n.oi.length > 0) stacks++;
+        if (n.ai) {{
+            n.ai.forEach(img => {{
+                spritesheets.add(img.ss);
+                images++;
+            }});
+        }}
+        n.children.forEach(traverse);
+    }}
+    
+    traverse(node);
+    return {{ spritesheets: spritesheets.size, stacks, images }};
+}}
+
+
+
+
 
 fetch('data.json')
     .then(r => r.json())
@@ -428,24 +470,32 @@ fetch('data.json')
         spriteConfig = d.sprite_config;
         buildTree(dataTree, document.getElementById('tree'));
         
-        const loader = document.createElement('div');
-        loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:monospace;';
-        loader.textContent = 'loading...';
-        document.body.appendChild(loader);
+        const totals = calculateTotals(dataTree);
+        totalSpritesheets = totals.spritesheets;
+        
+        loaderElement = document.createElement('div');
+        loaderElement.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:monospace;text-align:center;';
+        document.body.appendChild(loaderElement);
+        updateLoader();
         
         await renderContent(dataTree);
         isInitialLoad = false;
         
+        loaderElement.remove();
+        loaderElement = null;
+        
         const hash = window.location.hash.slice(2);
-        
-if (hash) {{
-    const node = findNodeByPath(dataTree, decodeURIComponent(hash));
-    console.log('Hash node found:', node);
-    if (node) await renderContent(node);
-}}
-        
-        loader.remove();
+        if (hash) {{
+            const node = findNodeByPath(dataTree, decodeURIComponent(hash));
+            if (node) await renderContent(node);
+        }}
     }});
+
+
+
+
+
+
 
 window.addEventListener('hashchange', () => {{
     const hash = window.location.hash.slice(2);
@@ -524,6 +574,8 @@ function disposeScene(sceneData) {{
     if (sceneData.scene) sceneData.scene.clear();
 }}
 
+
+
 async function loadSpritesheet(path) {{
     if (spritesheets[path]) return spritesheets[path];
     if (pendingLoads[path]) return pendingLoads[path];
@@ -534,11 +586,14 @@ async function loadSpritesheet(path) {{
             texture.magFilter = THREE.NearestFilter;
             spritesheets[path] = texture;
             delete pendingLoads[path];
+            loadedSpritesheets++;
+            if (loaderElement) updateLoader();
             resolve(texture);
         }});
     }});
     return pendingLoads[path];
 }}
+
 
 async function createThreeScene(container, images, node) {{
     const scene = new THREE.Scene();
@@ -847,10 +902,8 @@ const delay = useInstantLoad ? 0 : 1;
     countDiv.style.fontSize = '11px';
     container.appendChild(countDiv);
 
-    let loadedStacks = 0;
-    let loadedImages = 0;
-    const totalStacks = folders.length;
-    const totalImages = images.length;
+    totalStacks = folders.length;
+    totalImages = images.length;
 
     const updateCount = () => {{
         const downColor = currentNode && currentNode.children.length > 0 ? '#4f4' : '#44f';
@@ -960,6 +1013,8 @@ const delay = useInstantLoad ? 0 : 1;
 
                 loadedStacks++;
                 updateCount();
+                updateLoader();
+
                 const topY = (stackImages.length - 1) * STACK_SPACING;
                 const worldPos = new THREE.Vector3(xPos, topY, zPos);
                 const label = document.createElement('span');
@@ -1106,6 +1161,8 @@ const delay = useInstantLoad ? 0 : 1;
 
                     loadedStacks++;
                     updateCount();
+                    updateLoader();
+
                     const topY = (stackImages.length - 1) * STACK_SPACING;
                     const worldPos = new THREE.Vector3(xPos, topY, zPos);
                     const label = document.createElement('span');
@@ -1252,6 +1309,8 @@ const delay = useInstantLoad ? 0 : 1;
 
                 loadedStacks++;
                 updateCount();
+                updateLoader();
+
                 const topY = (stackImages.length - 1) * STACK_SPACING;
                 const worldPos = new THREE.Vector3(xPos, topY, zPos);
                 const label = document.createElement('span');
@@ -1471,7 +1530,7 @@ async function renderContent(node) {{
         }});
 
         div.appendChild(label);
-
+        contentDiv.appendChild(div);
 
         if (child.ai.length > 0 && child.at.length > 0) {{
             div.style.display = 'flex';
@@ -1539,10 +1598,10 @@ async function renderContent(node) {{
                div.appendChild(imgDiv);
            }} 
 
-            setTimeout(() => createThreeScene(imgDiv, child.ai, child), 0);
+            await createThreeScene(imgDiv, child.ai, child);
 
         }} else if (child.ai.length > 0) {{
-            setTimeout(() => createThreeScene(div, child.ai, child), 0);
+            await createThreeScene(div, child.ai, child);
 
         }} else if (child.at.length > 0) {{
             div.className = 'content-div text-content';
@@ -1600,7 +1659,6 @@ async function renderContent(node) {{
             }};
         }}
 
-        contentDiv.appendChild(div);
     }}
 return Promise.resolve();
 }}
