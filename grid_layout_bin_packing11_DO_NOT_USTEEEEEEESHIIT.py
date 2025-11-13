@@ -912,8 +912,10 @@ const delay = useInstantLoad ? 0 : 1;
     countDiv.style.fontSize = '11px';
     container.appendChild(countDiv);
 
-    totalStacks = folders.length;
-    totalImages = images.length;
+let loadedStacksLocal = 0;
+let loadedImagesLocal = 0;
+const totalStacksLocal = folders.length;
+const totalImagesLocal = images.length;
 
     const updateCount = () => {{
         const downColor = currentNode && currentNode.children.length > 0 ? '#4f4' : '#44f';
@@ -1023,10 +1025,11 @@ const delay = useInstantLoad ? 0 : 1;
                         mesh.geometry = geometryCache[uvKey];
                     }}
                     scene.add(mesh);
-                    loadedImages++;
-                    updateCount();
-                    updateLoader();
-
+                   loadedImages++;
+loadedImagesLocal++;
+updateCount();
+if (loaderElement) updateLoader();
+ 
                     if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
 
                 }}
@@ -1035,6 +1038,8 @@ const delay = useInstantLoad ? 0 : 1;
                 console.log('Stack loaded:', loadedStacks, '/', totalStacks);
                 updateCount();
                 updateLoader();
+if (loaderElement) updateLoader();
+
 
                 const topY = (stackImages.length - 1) * STACK_SPACING;
                 const worldPos = new THREE.Vector3(xPos, topY, zPos);
@@ -1185,6 +1190,8 @@ console.log('Processing localIdx:', localIdx, 'of', group.folders.length);
                         loadedImages++;
                         updateCount();
                         updateLoader();
+if (loaderElement) updateLoader();
+
 
                         if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
 
@@ -1195,6 +1202,8 @@ console.log('Processing localIdx:', localIdx, 'of', group.folders.length);
 
                     updateCount();
                     updateLoader();
+if (loaderElement) updateLoader();
+
 
                     const topY = (stackImages.length - 1) * STACK_SPACING;
                     const worldPos = new THREE.Vector3(xPos, topY, zPos);
@@ -1343,6 +1352,8 @@ console.log('stackImages:', stackImages ? stackImages.length : 'undefined');
                     loadedImages++;
                     updateCount();
                     updateLoader();
+if (loaderElement) updateLoader();
+
 
                     if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
 
@@ -1353,6 +1364,8 @@ console.log('stackImages:', stackImages ? stackImages.length : 'undefined');
 
                 updateCount();
                 updateLoader();
+if (loaderElement) updateLoader();
+
 
                 const topY = (stackImages.length - 1) * STACK_SPACING;
                 const worldPos = new THREE.Vector3(xPos, topY, zPos);
@@ -1502,8 +1515,6 @@ let currentNode = null;
 let isInitialLoad = true;
 
 async function renderContent(node) {{
-    loadedStacks = 0;
-    loadedImages = 0;
     if (!isInitialLoad) {{
         updateURL(node);
     }}

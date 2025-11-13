@@ -74,15 +74,6 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 let dataTree;
 let spriteConfig;
 let activeScenes = [];
-let loadedSpritesheets = 0;
-let totalSpritesheets = 0;
-let loaderElement = null;
-
-let loadedStacks = 0;
-let totalStacks = 0;
-let loadedImages = 0;
-let totalImages = 0;
-
 const spritesheets = {};
 const pendingLoads = {};
 const materialCache = {};
@@ -102,42 +93,6 @@ function updateURL(node) {
 
 
 
-
-function updateLoader() {
-    if (!loaderElement) return;
-    console.log('updateLoader called:', loadedSpritesheets, totalSpritesheets, loadedStacks, totalStacks, loadedImages, totalImages);
-    loaderElement.innerHTML = `
-        loading...<br>
-        spritesheets: ${loadedSpritesheets}/${totalSpritesheets}<br>
-        stacks: ${loadedStacks}/${totalStacks}<br>
-        images: ${loadedImages}/${totalImages}
-    `;
-}
-
-
-function calculateTotals(node) {
-    const spritesheets = new Set();
-    let stacks = 0;
-    let images = 0;
-    
-    function traverse(n) {
-        if (n.oi && n.oi.length > 0) stacks++;
-        if (n.ai) {
-            n.ai.forEach(img => {
-                spritesheets.add(img.ss);
-                images++;
-            });
-        }
-        n.children.forEach(traverse);
-    }
-    
-    traverse(node);
-    return { spritesheets: spritesheets.size, stacks, images };
-}
-
-
-
-
 fetch('data.json')
     .then(r => r.json())
     .then(async d => {
@@ -145,46 +100,30 @@ fetch('data.json')
         spriteConfig = d.sprite_config;
         buildTree(dataTree, document.getElementById('tree'));
         
-        const totals = calculateTotals(dataTree);
-        totalSpritesheets = totals.spritesheets;
-        totalStacks = totals.stacks;
-        totalImages = totals.images;
+        const loader = document.createElement('div');
+        loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:monospace;';
+        loader.textContent = 'loading...';
+        document.body.appendChild(loader);
         
-        loaderElement = document.createElement('div');
-        loaderElement.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:monospace;text-align:center;';
-        document.body.appendChild(loaderElement);
-        updateLoader();
-        
-        loadedSpritesheets = 0;
-        loadedStacks = 0;
-        loadedImages = 0;
-        
-        console.log('Starting renderContent');
         await renderContent(dataTree);
-        console.log('renderContent completed');
-        isInitialLoad = false;
         
         const hash = window.location.hash.slice(2);
         if (hash) {
-            const node = findNodeByPath(dataTree, decodeURIComponent(hash));
+            const node = findNodeByPath(dataTree, hash);
             if (node) await renderContent(node);
         }
         
-        loaderElement.remove();
-        console.log('Loader removed');
-        loaderElement = null;
+        isInitialLoad = false;
+        loader.remove();
     });
-
-
 
 
 
 window.addEventListener('hashchange', () => {
     const hash = window.location.hash.slice(2);
-    const node = hash ? findNodeByPath(dataTree, decodeURIComponent(hash)) : dataTree;
+    const node = hash ? findNodeByPath(dataTree, hash) : dataTree;
     if (node) renderContent(node);
 });
-
 
 
 function buildTree(node, container, depth = 0, isLast = true, prefix = '') {
@@ -256,7 +195,6 @@ function disposeScene(sceneData) {
     if (sceneData.scene) sceneData.scene.clear();
 }
 
-
 async function loadSpritesheet(path) {
     if (spritesheets[path]) return spritesheets[path];
     if (pendingLoads[path]) return pendingLoads[path];
@@ -267,15 +205,11 @@ async function loadSpritesheet(path) {
             texture.magFilter = THREE.NearestFilter;
             spritesheets[path] = texture;
             delete pendingLoads[path];
-            loadedSpritesheets++;
-            console.log('Spritesheet loaded:', loadedSpritesheets, '/', totalSpritesheets);
-            if (loaderElement) updateLoader();
             resolve(texture);
         });
     });
     return pendingLoads[path];
 }
-
 
 async function createThreeScene(container, images, node) {
     const scene = new THREE.Scene();
@@ -584,8 +518,10 @@ const delay = useInstantLoad ? 0 : 1;
     countDiv.style.fontSize = '11px';
     container.appendChild(countDiv);
 
-    totalStacks = folders.length;
-    totalImages = images.length;
+    let loadedStacks = 0;
+    let loadedImages = 0;
+    const totalStacks = folders.length;
+    const totalImages = images.length;
 
     const updateCount = () => {
         const downColor = currentNode && currentNode.children.length > 0 ? '#4f4' : '#44f';
@@ -611,17 +547,10 @@ const delay = useInstantLoad ? 0 : 1;
 
     const stackLabels = [];
 
-     await (async () => {
-        console.log('IIFE started, processing', folders.length, 'folders');
-        console.log('IIFE started, processing', folders.length, 'folders');
-        console.log('node.grid_layout:', node.grid_layout);
-        console.log('gridGroups length:', gridGroups ? gridGroups.length : 'null');
-        if (node.grid_layout) {
-            console.log('ENTERING node.grid_layout branch');
 
-            console.log('Using node.grid_layout path, folders:', folders.length);
+    (async () => {
+        if (node.grid_layout) {
             for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {
-                console.log('Processing stack', stackIdx, 'of', folders.length);
                 const folderName = folders[stackIdx];
                 const stackImages = grouped[folderName];
                 const row = Math.floor(stackIdx / cols);
@@ -630,7 +559,6 @@ const delay = useInstantLoad ? 0 : 1;
                 const zPos = row * spacing - offsetZ;
 
                 for (let i = 0; i < stackImages.length; i++) {
-                    console.log('Loading image', i, 'of', stackImages.length, 'in stack', stackIdx);
                     const imgData = stackImages[i];
                     const texture = await loadSpritesheet(imgData.ss);
                     if (!materialCache[imgData.ss]) {
@@ -697,17 +625,12 @@ const delay = useInstantLoad ? 0 : 1;
                     scene.add(mesh);
                     loadedImages++;
                     updateCount();
-                    updateLoader();
-
                     if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
 
                 }
 
                 loadedStacks++;
-                console.log('Stack loaded:', loadedStacks, '/', totalStacks);
                 updateCount();
-                updateLoader();
-
                 const topY = (stackImages.length - 1) * STACK_SPACING;
                 const worldPos = new THREE.Vector3(xPos, topY, zPos);
                 const label = document.createElement('span');
@@ -772,18 +695,10 @@ const delay = useInstantLoad ? 0 : 1;
                 });
             }
         } else if (gridGroups && gridGroups.length > 0) {
-             console.log('ENTERING gridGroups branch');
-console.log('ENTERING gridGroups branch');
-console.log('gridGroups:', gridGroups);
             for (const group of gridGroups) {
-    console.log('Processing group:', group.path, 'folders:', group.folders.length);
-
                 for (let localIdx = 0; localIdx < group.folders.length; localIdx++) {
-console.log('Processing localIdx:', localIdx, 'of', group.folders.length);
-        const folderName = group.folders[localIdx];
-        console.log('folderName:', folderName);
-        const stackImages = grouped[folderName];
-        console.log('stackImages:', stackImages ? stackImages.length : 'undefined');
+                    const folderName = group.folders[localIdx];
+                    const stackImages = grouped[folderName];
                     const row = Math.floor(localIdx / group.cols);
                     const col = localIdx % group.cols;
                     const xPos = (group.gridX + col) * spacing - offsetX;
@@ -856,18 +771,12 @@ console.log('Processing localIdx:', localIdx, 'of', group.folders.length);
                         scene.add(mesh);
                         loadedImages++;
                         updateCount();
-                        updateLoader();
-
                         if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
 
                     }
 
                     loadedStacks++;
-                    console.log('Stack loaded:', loadedStacks, '/', totalStacks);
-
                     updateCount();
-                    updateLoader();
-
                     const topY = (stackImages.length - 1) * STACK_SPACING;
                     const worldPos = new THREE.Vector3(xPos, topY, zPos);
                     const label = document.createElement('span');
@@ -933,21 +842,15 @@ console.log('Processing localIdx:', localIdx, 'of', group.folders.length);
                 }
             }
         } else {
-            console.log('ENTERING default else branch');
-
             for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {
                 const folderName = folders[stackIdx];
                 const stackImages = grouped[folderName];
-console.log('stackImages:', stackImages ? stackImages.length : 'undefined');
-
                 const row = Math.floor(stackIdx / cols);
                 const col = stackIdx % cols;
                 const xPos = col * spacing - offsetX;
                 const zPos = row * spacing - offsetZ;
 
                 for (let i = 0; i < stackImages.length; i++) {
-    console.log('Processing image', i, 'of', stackImages.length);
-
                     const imgData = stackImages[i];
                     const texture = await loadSpritesheet(imgData.ss);
                     if (!materialCache[imgData.ss]) {
@@ -1014,18 +917,12 @@ console.log('stackImages:', stackImages ? stackImages.length : 'undefined');
                     scene.add(mesh);
                     loadedImages++;
                     updateCount();
-                    updateLoader();
-
                     if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
 
                 }
 
                 loadedStacks++;
-                console.log('Image loaded:', loadedImages, '/', totalImages);
-
                 updateCount();
-                updateLoader();
-
                 const topY = (stackImages.length - 1) * STACK_SPACING;
                 const worldPos = new THREE.Vector3(xPos, topY, zPos);
                 const label = document.createElement('span');
@@ -1090,7 +987,6 @@ console.log('stackImages:', stackImages ? stackImages.length : 'undefined');
                 });
             }
         }
-        console.log('IIFE completed');
     })();
 
     const stats = new Stats();
@@ -1174,8 +1070,6 @@ let currentNode = null;
 let isInitialLoad = true;
 
 async function renderContent(node) {
-    loadedStacks = 0;
-    loadedImages = 0;
     if (!isInitialLoad) {
         updateURL(node);
     }
@@ -1190,8 +1084,6 @@ async function renderContent(node) {
     activeScenes = [];
     const contentDiv = document.getElementById('content');
     contentDiv.innerHTML = '';
-    
-    await new Promise(resolve => setTimeout(resolve, 0));
     
     console.log('=== renderContent DEBUG ===');
     console.log('node:', node);
@@ -1248,7 +1140,7 @@ async function renderContent(node) {
         });
 
         div.appendChild(label);
-        contentDiv.appendChild(div);
+
 
         if (child.ai.length > 0 && child.at.length > 0) {
             div.style.display = 'flex';
@@ -1316,10 +1208,10 @@ async function renderContent(node) {
                div.appendChild(imgDiv);
            } 
 
-            await createThreeScene(imgDiv, child.ai, child);
+            setTimeout(() => createThreeScene(imgDiv, child.ai, child), 0);
 
         } else if (child.ai.length > 0) {
-            await createThreeScene(div, child.ai, child);
+            setTimeout(() => createThreeScene(div, child.ai, child), 0);
 
         } else if (child.at.length > 0) {
             div.className = 'content-div text-content';
@@ -1377,6 +1269,7 @@ async function renderContent(node) {
             };
         }
 
+        contentDiv.appendChild(div);
     }
 return Promise.resolve();
 }
