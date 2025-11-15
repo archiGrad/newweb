@@ -54,7 +54,7 @@ add my comment back in global vars
 
 
 in loading screen, add performnt images load and spritesheets and stacks
-
+no pan in 3d vieport, is not nice navigation. we should make this a constraint or somethingu
 
 show in the treeview where the .stop_accum files ar red dot?
 
