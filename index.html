@@ -67,70 +67,68 @@ canvas { display: block; width: 100%; height: 100%; }
   }
 }
 </script>
+
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+let progress = {ss: 0, ssTotal: 0, stacks: 0, stacksTotal: 0, imgs: 0, imgsTotal: 0};
+
+
+
+function updateLoader() {
+    const l = document.getElementById('loader');
+    if (!l) return;
+    
+    const ssPercent = progress.ssTotal > 0 ? Math.floor((progress.ss / progress.ssTotal) * 100) : 0;
+    const stacksPercent = progress.stacksTotal > 0 ? Math.floor((progress.stacks / progress.stacksTotal) * 100) : 0;
+    const imgsPercent = progress.imgsTotal > 0 ? Math.floor((progress.imgs / progress.imgsTotal) * 100) : 0;
+    
+
+
+const makeBar = (percent) => {
+    const filled = Math.min(20, Math.floor(percent / 2));
+    const empty = 20 - filled;
+    return '█'.repeat(filled) + '·'.repeat(empty);
+};
+
+    
+    l.innerHTML = `<div style="line-height:1.8;font-family:monospace;">
+        spritesheets: ${progress.ss}/${progress.ssTotal}<br>
+        ${makeBar(ssPercent)} ${ssPercent}%<br>
+        <br>
+        stacks: ${progress.stacks}/${progress.stacksTotal}<br>
+        ${makeBar(stacksPercent)} ${stacksPercent}%<br>
+        <br>
+        images: ${progress.imgs}/${progress.imgsTotal}<br>
+        ${makeBar(imgsPercent)} ${imgsPercent}%
+    </div>`;
+}
+
+
+
+
+
+async function updateLoaderAsync() {
+    updateLoader();
+    await new Promise(r => requestAnimationFrame(r));
+}
 
 const loader = document.createElement('div');
-loader.id = 'loading-screen';
-loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);color:white;display:flex;align-items:center;justify-content:center;z-index:99999;font-family:monospace;font-size:14px;';
-loader.innerHTML = '<div style="font-family:monospace;font-size:14px;line-height:1.8;background:black;padding:20px;border:2px solid white;"><div>initializing...</div></div>';
+loader.id = 'loader';
+loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:99999;';
+loader.textContent = 'initializing...';
 document.body.appendChild(loader);
-console.log('[Init] Loading screen created at script start');
-
 
 let dataTree;
+
+
 let spriteConfig;
 let activeScenes = [];
 const spritesheets = {};
 const pendingLoads = {};
 const materialCache = {};
 const geometryCache = {};
-
-
-
-let loadingProgress = {
-    spritesheets: { loaded: 0, total: 0 },
-    stacks: { loaded: 0, total: 0 },
-    images: { loaded: 0, total: 0 }
-};
-
-
-function updateLoadingScreen() {
-    const loader = document.getElementById('loading-screen');
-    if (!loader) {
-        console.log('[updateLoadingScreen] NO LOADER FOUND!');
-        return;
-    }
-    
-    const { spritesheets, stacks, images } = loadingProgress;
-    const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16);
-    
-    loader.innerHTML = `<h1 style="font-size:48px;color:white;background:red;padding:50px;border:10px solid yellow;">LOADING<br>spritesheets: ${spritesheets.loaded}/${spritesheets.total}<br>stacks: ${stacks.loaded}/${stacks.total}<br>images: ${images.loaded}/${images.total}</h1>`;
-    loader.style.background = randomColor;
-    
-    console.log('[updateLoadingScreen] Updated');
-}
-
-function resetLoadingProgress() {
-    loadingProgress = {
-        spritesheets: { loaded: 0, total: 0 },
-        stacks: { loaded: 0, total: 0 },
-        images: { loaded: 0, total: 0 }
-    };
-    updateLoadingScreen();
-}
-
-
-
-
-
-
-
-
-
-
 
 function seededRandom(seed) {
         let state = seed;
@@ -153,18 +151,19 @@ fetch('data.json')
         spriteConfig = d.sprite_config;
         buildTree(dataTree, document.getElementById('tree'));
         
+        progress = {ss: 0, ssTotal: 0, stacks: 0, stacksTotal: 0, imgs: 0, imgsTotal: 0};
+        
         await renderContent(dataTree);
+        
+        isInitialLoad = false;
+        const loaderEl = document.getElementById('loader');
+        if (loaderEl) loaderEl.remove();
         
         const hash = window.location.hash.slice(2);
         if (hash) {
             const node = findNodeByPath(dataTree, hash);
             if (node) await renderContent(node);
         }
-        
-        console.log('[Init] Removing loading screen');
-        isInitialLoad = false;
-        const loader = document.getElementById('loading-screen');
-        if (loader) loader.remove();
     });
 
 window.addEventListener('hashchange', () => {
@@ -243,14 +242,11 @@ function disposeScene(sceneData) {
     if (sceneData.scene) sceneData.scene.clear();
 }
 
+
+
 async function loadSpritesheet(path) {
-    if (spritesheets[path]) {
-        console.log('[loadSpritesheet] Using cached:', path);
-        return spritesheets[path];
-    }
+    if (spritesheets[path]) return spritesheets[path];
     if (pendingLoads[path]) return pendingLoads[path];
-    
-    console.log('[loadSpritesheet] Loading:', path);
     pendingLoads[path] = new Promise((resolve) => {
         const loader = new THREE.TextureLoader();
         loader.load(path, (texture) => {
@@ -258,14 +254,14 @@ async function loadSpritesheet(path) {
             texture.magFilter = THREE.NearestFilter;
             spritesheets[path] = texture;
             delete pendingLoads[path];
-            loadingProgress.spritesheets.loaded++;
-            console.log('[loadSpritesheet] Loaded:', path, loadingProgress.spritesheets.loaded + '/' + loadingProgress.spritesheets.total);
-            updateLoadingScreen();
+            progress.ss++;
+            updateLoader();
             resolve(texture);
         });
     });
     return pendingLoads[path];
 }
+
 
 async function createThreeScene(container, images, node) {
     console.log('[createThreeScene] START for node:', node.name, 'images:', images.length);
@@ -281,9 +277,7 @@ async function createThreeScene(container, images, node) {
     const ORDERED_GRID_LAYOUT = spriteConfig.ordered_grid_layout;
     const ROTATION_SPEED = spriteConfig.rotation_speed;
 
-const QUICKLOAD_THRESHOLD = spriteConfig.quickload_threshold;
-const useInstantLoad = images.length > QUICKLOAD_THRESHOLD;
-const delay = useInstantLoad ? 1 : 1;
+const LOADINGSCREEN_IMG_INCREMENT = spriteConfig.loadingscreen_img_increment;
 
 
     images.forEach(imgData => {
@@ -298,21 +292,12 @@ const delay = useInstantLoad ? 1 : 1;
         grouped[folder].sort((a, b) => a.global_index - b.global_index);
     });
    
-
-loadingProgress.stacks.total += folders.length;
-loadingProgress.images.total += images.length;
-
-const uniqueSpritesheets = new Set(images.map(img => img.ss));
-loadingProgress.spritesheets.total += uniqueSpritesheets.size;
-uniqueSpritesheets.forEach(ss => {
-    if (spritesheets[ss]) {
-        loadingProgress.spritesheets.loaded++;
-    }
-});
-
-console.log('[createThreeScene] Totals for', node.name, '- SS:', uniqueSpritesheets.size, 'Stacks:', folders.length, 'Images:', images.length);
-updateLoadingScreen();
-
+progress.imgsTotal += images.length;
+progress.stacksTotal += folders.length;
+const uniqueSS = new Set(images.map(i => i.ss));
+progress.ssTotal += uniqueSS.size;
+uniqueSS.forEach(ss => { if (spritesheets[ss]) progress.ss++; });
+updateLoader();
  
     const sharedGeometry = new THREE.PlaneGeometry(1, 1);
     
@@ -623,11 +608,6 @@ updateLoadingScreen();
 
     const loadingPromise = (async () => {
     console.log('[createThreeScene] Beginning async IIFE for:', node.name);
-
-
-
-
-
         if (node.grid_layout) {
             for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {
                 const folderName = folders[stackIdx];
@@ -701,22 +681,20 @@ updateLoadingScreen();
                         }
                         mesh.geometry = geometryCache[uvKey];
                     }
-                   scene.add(mesh);
+                   
+scene.add(mesh);
 loadedImages++;
 updateCount();
-loadingProgress.images.loaded++;
-if (loadedImages % 10 === 0 || loadedImages === totalImages) {
-    updateLoadingScreen();
-    await new Promise(resolve => requestAnimationFrame(resolve));
-} 
+progress.imgs++;
+if (progress.imgs % LOADINGSCREEN_IMG_INCREMENT === 0 || progress.imgs === progress.imgsTotal) await updateLoaderAsync();
+
+ 
                 }
 
-loadedStacks++;
-updateCount();
-loadingProgress.stacks.loaded++;
-updateLoadingScreen();
-await new Promise(resolve => requestAnimationFrame(resolve));
- 
+                loadedStacks++;
+                updateCount();
+progress.stacks++;
+await updateLoaderAsync();
                 const topY = (stackImages.length - 1) * STACK_SPACING;
                 const worldPos = new THREE.Vector3(xPos, topY, zPos);
                 const label = document.createElement('span');
@@ -854,22 +832,19 @@ await new Promise(resolve => requestAnimationFrame(resolve));
                             }
                             mesh.geometry = geometryCache[uvKey];
                         }
+                        
 scene.add(mesh);
 loadedImages++;
 updateCount();
-loadingProgress.images.loaded++;
-if (loadedImages % 10 === 0 || loadedImages === totalImages) {
-    updateLoadingScreen();
-    await new Promise(resolve => requestAnimationFrame(resolve));
-}
+progress.imgs++;
+if (progress.imgs % LOADINGSCREEN_IMG_INCREMENT === 0 || progress.imgs === progress.imgsTotal) await updateLoaderAsync();
+
                     }
 
-loadedStacks++;
-updateCount();
-loadingProgress.stacks.loaded++;
-updateLoadingScreen();
-await new Promise(resolve => requestAnimationFrame(resolve));
- 
+                    loadedStacks++;
+                    updateCount();
+progress.stacks++;
+await updateLoaderAsync();
                     const topY = (stackImages.length - 1) * STACK_SPACING;
                     const worldPos = new THREE.Vector3(xPos, topY, zPos);
                     const label = document.createElement('span');
@@ -1007,25 +982,19 @@ await new Promise(resolve => requestAnimationFrame(resolve));
                         }
                         mesh.geometry = geometryCache[uvKey];
                     }
+
 scene.add(mesh);
 loadedImages++;
 updateCount();
-loadingProgress.images.loaded++;
-if (loadedImages % 10 === 0 || loadedImages === totalImages) {
-    updateLoadingScreen();
-    await new Promise(resolve => requestAnimationFrame(resolve));
-}
+progress.imgs++;
+if (progress.imgs % LOADINGSCREEN_IMG_INCREMENT === 0 || progress.imgs === progress.imgsTotal) await updateLoaderAsync();
+
                 }
 
-loadedStacks++;
-updateCount();
-loadingProgress.stacks.loaded++;
-updateLoadingScreen();
-await new Promise(resolve => requestAnimationFrame(resolve));
- 
-
-
-
+                loadedStacks++;
+                updateCount();
+progress.stacks++;
+await updateLoaderAsync();
                 const topY = (stackImages.length - 1) * STACK_SPACING;
                 const worldPos = new THREE.Vector3(xPos, topY, zPos);
                 const label = document.createElement('span');
@@ -1195,15 +1164,13 @@ async function renderContent(node) {
     const SEED = spriteConfig.seed;
     currentNode = node;
     updateTreeColors();
-    activeScenes.forEach(disposeScene);
-    activeScenes = [];
-    const contentDiv = document.getElementById('content');
-    contentDiv.innerHTML = '';
-  
-resetLoadingProgress();
-console.log('[renderContent] Reset loading progress');
+    
 
- 
+activeScenes.forEach(disposeScene);
+activeScenes = [];
+const contentDiv = document.getElementById('content');
+contentDiv.innerHTML = '';
+   
     const scenePromises = []; 
     console.log('=== renderContent DEBUG ===');
     console.log('node:', node);

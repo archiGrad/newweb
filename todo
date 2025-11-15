@@ -42,6 +42,11 @@ gif animation needs to be custom, not all same speed
 
 urgency  🔥
 ease of implementation ⭐
+make LOADINGSCREEN_IMG_INCREMENT a global var for loadingscren
+
+make global var for if > 1000 then load instant, if not, load gradual
+
+
 
 ui
 zoom, tooslow
