@@ -399,6 +399,15 @@ canvas {{ display: block; width: 100%; height: 100%; }}
 import * as THREE from 'three';
 import {{ OrbitControls }} from 'three/addons/controls/OrbitControls.js';
 
+
+const loader = document.createElement('div');
+loader.id = 'loading-screen';
+loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);color:white;display:flex;align-items:center;justify-content:center;z-index:99999;font-family:monospace;font-size:14px;';
+loader.innerHTML = '<div style="font-family:monospace;font-size:14px;line-height:1.8;background:black;padding:20px;border:2px solid white;"><div>initializing...</div></div>';
+document.body.appendChild(loader);
+console.log('[Init] Loading screen created at script start');
+
+
 let dataTree;
 let spriteConfig;
 let activeScenes = [];
@@ -416,26 +425,21 @@ let loadingProgress = {{
 }};
 
 
-
 function updateLoadingScreen() {{
     const loader = document.getElementById('loading-screen');
-    if (!loader) return;
+    if (!loader) {{
+        console.log('[updateLoadingScreen] NO LOADER FOUND!');
+        return;
+    }}
     
     const {{ spritesheets, stacks, images }} = loadingProgress;
-    loader.innerHTML = `
-        <div style="font-family:monospace;font-size:14px;line-height:1.8">
-            <div>spritesheets: ${{spritesheets.loaded}}/${{spritesheets.total}}</div>
-            <div>stacks: ${{stacks.loaded}}/${{stacks.total}}</div>
-            <div>images: ${{images.loaded}}/${{images.total}}</div>
-        </div>
-    `;
-    console.log('[Loading]', spritesheets.loaded + '/' + spritesheets.total, 'spritesheets,', 
-                stacks.loaded + '/' + stacks.total, 'stacks,',
-                images.loaded + '/' + images.total, 'images');
+    const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+    
+    loader.innerHTML = `<h1 style="font-size:48px;color:white;background:red;padding:50px;border:10px solid yellow;">LOADING<br>spritesheets: ${{spritesheets.loaded}}/${{spritesheets.total}}<br>stacks: ${{stacks.loaded}}/${{stacks.total}}<br>images: ${{images.loaded}}/${{images.total}}</h1>`;
+    loader.style.background = randomColor;
+    
+    console.log('[updateLoadingScreen] Updated');
 }}
-
-
-
 
 function resetLoadingProgress() {{
     loadingProgress = {{
@@ -477,16 +481,6 @@ fetch('data.json')
         spriteConfig = d.sprite_config;
         buildTree(dataTree, document.getElementById('tree'));
         
-        
-
-
-
-        const loader = document.createElement('div');
-        loader.id = 'loading-screen';
-        loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:monospace;font-size:14px;';
-        loader.textContent = 'initializing...';
-        document.body.appendChild(loader);
-        
         await renderContent(dataTree);
         
         const hash = window.location.hash.slice(2);
@@ -495,11 +489,11 @@ fetch('data.json')
             if (node) await renderContent(node);
         }}
         
+        console.log('[Init] Removing loading screen');
         isInitialLoad = false;
-        loader.remove();
+        const loader = document.getElementById('loading-screen');
+        if (loader) loader.remove();
     }});
-
-
 
 window.addEventListener('hashchange', () => {{
     const hash = window.location.hash.slice(2);
@@ -617,7 +611,7 @@ async function createThreeScene(container, images, node) {{
 
 const QUICKLOAD_THRESHOLD = spriteConfig.quickload_threshold;
 const useInstantLoad = images.length > QUICKLOAD_THRESHOLD;
-const delay = useInstantLoad ? 0 : 1;
+const delay = 50;
 
 
     images.forEach(imgData => {{
@@ -957,6 +951,11 @@ updateLoadingScreen();
 
     const loadingPromise = (async () => {{
     console.log('[createThreeScene] Beginning async IIFE for:', node.name);
+
+
+
+
+
         if (node.grid_layout) {{
             for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {{
                 const folderName = folders[stackIdx];
@@ -1035,18 +1034,22 @@ updateLoadingScreen();
                     updateCount();
                     
 loadingProgress.images.loaded++;
+console.log('[IMAGE] Incremented images.loaded to:', loadingProgress.images.loaded, 'Total:', loadingProgress.images.total);
 if (loadedImages % 10 === 0 || loadedImages === totalImages) {{
     updateLoadingScreen();
 }}
-
                     if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
 
                 }}
 
                 loadedStacks++;
                 updateCount();
-                loadingProgress.stacks.loaded++;
-                updateLoadingScreen();
+
+
+loadingProgress.stacks.loaded++;
+console.log('[STACK] Incremented stacks.loaded to:', loadingProgress.stacks.loaded, 'Total:', loadingProgress.stacks.total);
+updateLoadingScreen();
+
 
                 const topY = (stackImages.length - 1) * STACK_SPACING;
                 const worldPos = new THREE.Vector3(xPos, topY, zPos);
@@ -1188,18 +1191,27 @@ if (loadedImages % 10 === 0 || loadedImages === totalImages) {{
                         scene.add(mesh);
                         loadedImages++;
                         updateCount();
+
+
 loadingProgress.images.loaded++;
+console.log('[IMAGE] Incremented images.loaded to:', loadingProgress.images.loaded, 'Total:', loadingProgress.images.total);
 if (loadedImages % 10 === 0 || loadedImages === totalImages) {{
     updateLoadingScreen();
 }}
+
+
                         if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
 
                     }}
 
                     loadedStacks++;
                     updateCount();
+
+
 loadingProgress.stacks.loaded++;
+console.log('[STACK] Incremented stacks.loaded to:', loadingProgress.stacks.loaded, 'Total:', loadingProgress.stacks.total);
 updateLoadingScreen();
+
                     const topY = (stackImages.length - 1) * STACK_SPACING;
                     const worldPos = new THREE.Vector3(xPos, topY, zPos);
                     const label = document.createElement('span');
@@ -1343,9 +1355,11 @@ updateLoadingScreen();
                     
 
 loadingProgress.images.loaded++;
+console.log('[IMAGE] Incremented images.loaded to:', loadingProgress.images.loaded, 'Total:', loadingProgress.images.total);
 if (loadedImages % 10 === 0 || loadedImages === totalImages) {{
     updateLoadingScreen();
 }}
+
 
                    if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
 
@@ -1353,8 +1367,18 @@ if (loadedImages % 10 === 0 || loadedImages === totalImages) {{
 
                 loadedStacks++;
                 updateCount();
+
+
+
+
 loadingProgress.stacks.loaded++;
+console.log('[STACK] Incremented stacks.loaded to:', loadingProgress.stacks.loaded, 'Total:', loadingProgress.stacks.total);
 updateLoadingScreen();
+
+
+
+
+
                 const topY = (stackImages.length - 1) * STACK_SPACING;
                 const worldPos = new THREE.Vector3(xPos, topY, zPos);
                 const label = document.createElement('span');
