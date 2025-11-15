@@ -611,7 +611,7 @@ async function createThreeScene(container, images, node) {{
 
 const QUICKLOAD_THRESHOLD = spriteConfig.quickload_threshold;
 const useInstantLoad = images.length > QUICKLOAD_THRESHOLD;
-const delay = 50;
+const delay = useInstantLoad ? 1 : 1;
 
 
     images.forEach(imgData => {{
@@ -1029,28 +1029,22 @@ updateLoadingScreen();
                         }}
                         mesh.geometry = geometryCache[uvKey];
                     }}
-                    scene.add(mesh);
-                    loadedImages++;
-                    updateCount();
-                    
+                   scene.add(mesh);
+loadedImages++;
+updateCount();
 loadingProgress.images.loaded++;
-console.log('[IMAGE] Incremented images.loaded to:', loadingProgress.images.loaded, 'Total:', loadingProgress.images.total);
 if (loadedImages % 10 === 0 || loadedImages === totalImages) {{
     updateLoadingScreen();
-}}
-                    if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
-
+    await new Promise(resolve => requestAnimationFrame(resolve));
+}} 
                 }}
 
-                loadedStacks++;
-                updateCount();
-
-
+loadedStacks++;
+updateCount();
 loadingProgress.stacks.loaded++;
-console.log('[STACK] Incremented stacks.loaded to:', loadingProgress.stacks.loaded, 'Total:', loadingProgress.stacks.total);
 updateLoadingScreen();
-
-
+await new Promise(resolve => requestAnimationFrame(resolve));
+ 
                 const topY = (stackImages.length - 1) * STACK_SPACING;
                 const worldPos = new THREE.Vector3(xPos, topY, zPos);
                 const label = document.createElement('span');
@@ -1188,30 +1182,22 @@ updateLoadingScreen();
                             }}
                             mesh.geometry = geometryCache[uvKey];
                         }}
-                        scene.add(mesh);
-                        loadedImages++;
-                        updateCount();
-
-
+scene.add(mesh);
+loadedImages++;
+updateCount();
 loadingProgress.images.loaded++;
-console.log('[IMAGE] Incremented images.loaded to:', loadingProgress.images.loaded, 'Total:', loadingProgress.images.total);
 if (loadedImages % 10 === 0 || loadedImages === totalImages) {{
     updateLoadingScreen();
+    await new Promise(resolve => requestAnimationFrame(resolve));
 }}
-
-
-                        if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
-
                     }}
 
-                    loadedStacks++;
-                    updateCount();
-
-
+loadedStacks++;
+updateCount();
 loadingProgress.stacks.loaded++;
-console.log('[STACK] Incremented stacks.loaded to:', loadingProgress.stacks.loaded, 'Total:', loadingProgress.stacks.total);
 updateLoadingScreen();
-
+await new Promise(resolve => requestAnimationFrame(resolve));
+ 
                     const topY = (stackImages.length - 1) * STACK_SPACING;
                     const worldPos = new THREE.Vector3(xPos, topY, zPos);
                     const label = document.createElement('span');
@@ -1349,33 +1335,22 @@ updateLoadingScreen();
                         }}
                         mesh.geometry = geometryCache[uvKey];
                     }}
-                    scene.add(mesh);
-                    loadedImages++;
-                    updateCount();
-                    
-
+scene.add(mesh);
+loadedImages++;
+updateCount();
 loadingProgress.images.loaded++;
-console.log('[IMAGE] Incremented images.loaded to:', loadingProgress.images.loaded, 'Total:', loadingProgress.images.total);
 if (loadedImages % 10 === 0 || loadedImages === totalImages) {{
     updateLoadingScreen();
+    await new Promise(resolve => requestAnimationFrame(resolve));
 }}
-
-
-                   if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
-
                 }}
 
-                loadedStacks++;
-                updateCount();
-
-
-
-
+loadedStacks++;
+updateCount();
 loadingProgress.stacks.loaded++;
-console.log('[STACK] Incremented stacks.loaded to:', loadingProgress.stacks.loaded, 'Total:', loadingProgress.stacks.total);
 updateLoadingScreen();
-
-
+await new Promise(resolve => requestAnimationFrame(resolve));
+ 
 
 
 
