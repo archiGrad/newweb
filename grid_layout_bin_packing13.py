@@ -1386,7 +1386,8 @@ const delay = useInstantLoad ? 0 : 1;
     console.log('[createThreeScene] Returned from loadingPromise for:', node.name);
     
     return sceneData;
-}} 
+}}
+ 
 
 
  
@@ -1407,6 +1408,7 @@ function findNodeByPath(node, targetPath) {{
 let currentNode = null;
 
 let isInitialLoad = true;
+
 
 
 
@@ -1627,8 +1629,6 @@ async function renderContent(node) {{
 
     return Promise.resolve();
 }}
-
-
 
 
 
