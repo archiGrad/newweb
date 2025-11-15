@@ -168,20 +168,14 @@ a:hover {
 }
 
 
-
-
-/*scrollbar styling*/
-* { scrollbar-width: none; }
-*::-webkit-scrollbar { display: none; }
-
-
-
-
-
-
-
-
-
+/*scrolbar styling*/
+* {
+  -ms-overflow-style: none;  /* IE/Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+*::-webkit-scrollbar {
+  display: none;             /* Chrome, Safari, Edge */
+}
 
 
 
