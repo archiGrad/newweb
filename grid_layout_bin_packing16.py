@@ -39,7 +39,7 @@ MAX_GIF_FRAMES = 30
 STACK_SPACING = 0.15
 SEED = 293 # Master seed for deterministic randomization (zoom, layout, etc)
 
-QUICKLOAD_THRESHOLD = 1000
+QUICKLOAD_THRESHOLD = 100
 
 ORDERED_GRID_LAYOUT = True
 
@@ -806,6 +806,7 @@ updateLoader();
     renderer.setClearColor(0x000000);
     container.appendChild(renderer.domElement);
     const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enablePan = false;
 
     const navButtons = document.createElement('div');
     navButtons.style.position = 'absolute';
