@@ -84,10 +84,9 @@ function updateLoader() {
     const stacksPercent = progress.stacksTotal > 0 ? Math.floor((progress.stacks / progress.stacksTotal) * 100) : 0;
     const imgsPercent = progress.imgsTotal > 0 ? Math.floor((progress.imgs / progress.imgsTotal) * 100) : 0;
     
-
-
+ 
 const makeBar = (percent) => {
-    const filled = Math.min(20, Math.floor(percent / 2));
+    const filled = Math.floor(percent / 5);
     const empty = 20 - filled;
     return '█'.repeat(filled) + '·'.repeat(empty);
 };
