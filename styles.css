@@ -168,14 +168,26 @@ a:hover {
 }
 
 
-/*scrolbar styling*/
+
+
+
+/* HIDE SCROLLBARS — WORKS IN CHROME 2025 */
 * {
-  -ms-overflow-style: none;  /* IE/Edge */
-  scrollbar-width: none;     /* Firefox */
+  -ms-overflow-style: none;     /* IE/Edge */
+  scrollbar-width: none;        /* Firefox */
 }
 *::-webkit-scrollbar {
-  display: none;             /* Chrome, Safari, Edge */
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+  background: transparent !important;
 }
+
+/* Optional: Prevent layout shift */
+html {
+  overflow: -moz-scrollbars-none; /* Firefox old */
+}
+
 
 
 
