@@ -174,17 +174,13 @@ a:hover {
 /* CUSTOM SCROLLBAR */
 *::-webkit-scrollbar {
   width: 8px;
-  height: 8px;
+  height: 4px;
 }
 *::-webkit-scrollbar-track {
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 4px;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: #222;
 }
 * {
   scrollbar-width: thin;
