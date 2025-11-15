@@ -171,24 +171,25 @@ a:hover {
 
 
 
-/* HIDE SCROLLBARS — WORKS IN CHROME 2025 */
-* {
-  -ms-overflow-style: none;     /* IE/Edge */
-  scrollbar-width: none;        /* Firefox */
-}
+/* CUSTOM SCROLLBAR */
 *::-webkit-scrollbar {
-  width: 0 !important;
-  height: 0 !important;
-  display: none !important;
-  background: transparent !important;
+  width: 8px;
+  height: 8px;
 }
-
-/* Optional: Prevent layout shift */
-html {
-  overflow: -moz-scrollbars-none; /* Firefox old */
+*::-webkit-scrollbar-track {
+  background: transparent;
 }
-
-
+*::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
 
 
 
