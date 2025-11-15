@@ -38,7 +38,7 @@ MAX_GIF_FRAMES = 30
 
 STACK_SPACING = 0.15
 SEED = 293 # Master seed for deterministic randomization (zoom, layout, etc)
-LOADINGSCREEN_IMG_INCREMENT = 50
+
 
 ORDERED_GRID_LAYOUT = True
 
@@ -46,6 +46,7 @@ ROTATION_SPEED = 0.000015
 
 RANDOM_TEXTDIV_POSITION = False  # False = text always left, True = random based on seed
 
+LOADINGSCREEN_IMG_INCREMENT = 50
 
 
 def apply_filter(img):
@@ -444,7 +445,7 @@ async function updateLoaderAsync() {{
 const loader = document.createElement('div');
 loader.id = 'loader';
 loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:99999;';
-loader.textContent = 'initializing...';
+loader.textContent = 'archiGrad.io';
 document.body.appendChild(loader);
 
 let dataTree;
@@ -603,6 +604,9 @@ async function createThreeScene(container, images, node) {{
     const SEED = spriteConfig.seed;
     const ORDERED_GRID_LAYOUT = spriteConfig.ordered_grid_layout;
     const ROTATION_SPEED = spriteConfig.rotation_speed;
+
+
+
 
 const LOADINGSCREEN_IMG_INCREMENT = spriteConfig.loadingscreen_img_increment;
 
