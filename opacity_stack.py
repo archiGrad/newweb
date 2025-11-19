@@ -1,94 +1,130 @@
 from pathlib import Path
 import json
+import ast
 from PIL import Image
 from natsort import natsorted
 
 # ==========================================
-# CONFIGURATION
+# GLOBAL DEFAULT CONFIGURATION
 # ==========================================
 
-SPRITESHEET_SIZE = 1024 * 4
-SPRITE_SIZE = 128
-SPRITE_PADDING = 0
-SPRITES_PER_ROW = SPRITESHEET_SIZE // SPRITE_SIZE
-SPRITES_PER_SHEET = SPRITES_PER_ROW * SPRITES_PER_ROW
-RESIZE_METHOD = Image.LANCZOS
-SPRITESHEET_FORMAT = 'webp'
-WEBP_QUALITY = 100
-WEBP_METHOD = 0
-PNG_COMPRESS_LEVEL = 9
-PNG_OPTIMIZE = True
+DEFAULTS = {
+    'SPRITESHEET_SIZE': 1024 * 4,
+    'SPRITE_SIZE': 64,
+    'SPRITE_PADDING': 0,
+    'RESIZE_METHOD': Image.LANCZOS,
+    'SPRITESHEET_FORMAT': 'webp',
+    
+    # Image Processing Defaults
+    'SHARPEN': False,
+    'SHARPEN_RADIUS': 2,
+    'SHARPEN_PERCENT': 100,
+    'SHARPEN_THRESHOLD': 3,
 
-SHARPEN = False
-SHARPEN_RADIUS = 2
-SHARPEN_PERCENT = 100
-SHARPEN_THRESHOLD = 3
+    'GAUSSIAN_BLUR': False,
+    'GAUSSIAN_BLUR_RADIUS': 2,
+    
+    'COLOR_TO_TRANSPARENT': 'blue',
+    'COLOR_THRESHOLD': 30,
 
-GAUSSIAN_BLUR = False
-GAUSSIAN_BLUR_RADIUS = 2
-COLOR_TO_TRANSPARENT = 'blue'
-COLOR_THRESHOLD = 30
+    'DITHERING': False,
+    'DITHER_MODE': 'custom_palette',
+    'DITHER_METHOD': 'ordered',
+    'DITHER_COLORS': 256,
+    'CUSTOM_PALETTE': ['#000000', '#FF0000', '#00FF00'],
 
-DITHERING = False
-DITHER_MODE = 'custom_palette'
-DITHER_METHOD = 'ordered'
-DITHER_COLORS = 256
-CUSTOM_PALETTE = ['#000000', '#FF0000', '#00FF00']
+    'MAX_GIF_FRAMES': 30,
+    'GIF_SPEED': 0.5, # 0.0 (Slow) to 1.0 (Fast)
+    
+    # Viewer Config
+    'STACK_SPACING': 0.15,
+    'SEED': 293,
+    'QUICKLOAD_THRESHOLD': 100,
+    'ORDERED_GRID_LAYOUT': True,
+    'ROTATION_SPEED': 0.000015,
+    'RANDOM_TEXTDIV_POSITION': False,
+    'LOADINGSCREEN_IMG_INCREMENT': 50
+}
 
-MAX_GIF_FRAMES = 30
+# ==========================================
+# CONFIGURATION PARSING
+# ==========================================
 
-STACK_SPACING = 0.15
-SEED = 293
-QUICKLOAD_THRESHOLD = 100
-ORDERED_GRID_LAYOUT = True
-ROTATION_SPEED = 0.000015
-RANDOM_TEXTDIV_POSITION = False
-LOADINGSCREEN_IMG_INCREMENT = 50
+def parse_custom_processing(path, current_config):
+    """Parses .custom_processing file and updates config dict"""
+    new_config = current_config.copy()
+    
+    # Check for Resolution override
+    sprite_size_file = path / '.sprite_size'
+    if sprite_size_file.exists():
+        try:
+            val = int(sprite_size_file.read_text().strip())
+            new_config['SPRITE_SIZE'] = val
+        except:
+            print(f"Warning: Invalid .sprite_size in {path}")
+
+    # Check for Processing override
+    custom_file = path / '.custom_processing'
+    if custom_file.exists():
+        try:
+            content = custom_file.read_text()
+            # Safe-ish parsing of python-like variable assignments
+            for line in content.splitlines():
+                line = line.strip()
+                if not line or line.startswith('#'): continue
+                if '=' in line:
+                    key, value = [x.strip() for x in line.split('=', 1)]
+                    if key in DEFAULTS:
+                        try:
+                            # Use ast.literal_eval for safe type conversion (bool, list, int, float)
+                            new_config[key] = ast.literal_eval(value)
+                        except:
+                            # Fallback for strings that might not be quoted in the text file
+                            new_config[key] = value
+        except Exception as e:
+            print(f"Warning: Error parsing .custom_processing in {path}: {e}")
+            
+    return new_config
 
 # ==========================================
 # IMAGE PROCESSING FUNCTIONS
 # ==========================================
 
-def apply_filter(img):
-    if SHARPEN:
+def apply_filter(img, conf):
+    if conf['SHARPEN']:
         from PIL import ImageFilter
         img = img.filter(ImageFilter.UnsharpMask(
-            radius=SHARPEN_RADIUS,
-            percent=SHARPEN_PERCENT,
-            threshold=SHARPEN_THRESHOLD
+            radius=conf['SHARPEN_RADIUS'],
+            percent=conf['SHARPEN_PERCENT'],
+            threshold=conf['SHARPEN_THRESHOLD']
         )) 
 
-    if GAUSSIAN_BLUR:
+    if conf['GAUSSIAN_BLUR']:
         from PIL import ImageFilter
-        img = img.filter(ImageFilter.GaussianBlur(radius=GAUSSIAN_BLUR_RADIUS))
+        img = img.filter(ImageFilter.GaussianBlur(radius=conf['GAUSSIAN_BLUR_RADIUS']))
     
-    if COLOR_TO_TRANSPARENT:
+    if conf['COLOR_TO_TRANSPARENT']:
         colors = {
-            'black': (0, 0, 0),
-            'white': (255, 255, 255),
-            'red': (255, 0, 0),
-            'green': (0, 255, 0),
-            'blue': (0, 0, 255),
-            'yellow': (255, 255, 0),
-            'cyan': (0, 255, 255),
-            'magenta': (255, 0, 255),
-            'light_gray': (192, 192, 192),
-            'dark_gray': (64, 64, 64),
-            'orange': (255, 165, 0),
-            'purple': (128, 0, 128)
+            'black': (0, 0, 0), 'white': (255, 255, 255), 'red': (255, 0, 0),
+            'green': (0, 255, 0), 'blue': (0, 0, 255), 'yellow': (255, 255, 0),
+            'cyan': (0, 255, 255), 'magenta': (255, 0, 255), 'light_gray': (192, 192, 192),
+            'dark_gray': (64, 64, 64), 'orange': (255, 165, 0), 'purple': (128, 0, 128)
         }
-        target_r, target_g, target_b = colors[COLOR_TO_TRANSPARENT]
-        img = img.convert('RGBA')
-        pixels = img.load()
-        for y in range(img.height):
-            for x in range(img.width):
-                r, g, b, a = pixels[x, y]
-                if (abs(r - target_r) < COLOR_THRESHOLD and 
-                    abs(g - target_g) < COLOR_THRESHOLD and 
-                    abs(b - target_b) < COLOR_THRESHOLD):
-                    pixels[x, y] = (r, g, b, 0)
+        target = conf['COLOR_TO_TRANSPARENT']
+        if target in colors:
+            target_r, target_g, target_b = colors[target]
+            img = img.convert('RGBA')
+            pixels = img.load()
+            thresh = conf['COLOR_THRESHOLD']
+            for y in range(img.height):
+                for x in range(img.width):
+                    r, g, b, a = pixels[x, y]
+                    if (abs(r - target_r) < thresh and 
+                        abs(g - target_g) < thresh and 
+                        abs(b - target_b) < thresh):
+                        pixels[x, y] = (r, g, b, 0)
     
-    if DITHERING:
+    if conf['DITHERING']:
         dither_map = {
             'floyd_steinberg': Image.Dither.FLOYDSTEINBERG,
             'ordered': Image.Dither.ORDERED,
@@ -98,19 +134,19 @@ def apply_filter(img):
         has_alpha = img.mode == 'RGBA'
         alpha_channel = img.split()[3] if has_alpha else None
         
-        if DITHER_MODE == 'bw':
+        if conf['DITHER_MODE'] == 'bw':
             rgb_img = img.convert('L')
-            dithered = rgb_img.convert('1', dither=dither_map[DITHER_METHOD])
+            dithered = rgb_img.convert('1', dither=dither_map[conf['DITHER_METHOD']])
             dithered = dithered.convert('RGB')
         
-        elif DITHER_MODE == 'color_reduce':
+        elif conf['DITHER_MODE'] == 'color_reduce':
             rgb_img = img.convert('RGB')
-            dithered = rgb_img.quantize(colors=DITHER_COLORS, dither=dither_map[DITHER_METHOD])
+            dithered = rgb_img.quantize(colors=conf['DITHER_COLORS'], dither=dither_map[conf['DITHER_METHOD']])
             dithered = dithered.convert('RGB')
         
-        elif DITHER_MODE == 'custom_palette':
+        elif conf['DITHER_MODE'] == 'custom_palette':
             palette_colors = []
-            for hex_color in CUSTOM_PALETTE:
+            for hex_color in conf['CUSTOM_PALETTE']:
                 hex_color = hex_color.lstrip('#')
                 r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
                 palette_colors.extend([r, g, b])
@@ -122,7 +158,7 @@ def apply_filter(img):
             palette_img.putpalette(palette_colors)
             
             rgb_img = img.convert('RGB')
-            dithered = rgb_img.quantize(palette=palette_img, dither=dither_map[DITHER_METHOD])
+            dithered = rgb_img.quantize(palette=palette_img, dither=dither_map[conf['DITHER_METHOD']])
             dithered = dithered.convert('RGB')
         
         if has_alpha:
@@ -133,15 +169,19 @@ def apply_filter(img):
     
     return img
 
-def resize_image(img):
+def resize_image(img, target_size):
     w, h = img.size
     longest = max(w, h)
-    if longest != SPRITE_SIZE:
-        scale = SPRITE_SIZE / longest
+    if longest != target_size:
+        scale = target_size / longest
         new_w = int(w * scale)
         new_h = int(h * scale)
-        img = img.resize((new_w, new_h), RESIZE_METHOD)
+        img = img.resize((new_w, new_h), DEFAULTS['RESIZE_METHOD'])
     return img
+
+# ==========================================
+# FILE SCANNING
+# ==========================================
 
 def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'images', 'backup', 'geo']):
     if path.name in ignore:
@@ -159,14 +199,11 @@ def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'im
         if grid_file.exists():
             grid_layout = grid_file.read_text().strip()
         
-        no_accum_file = path / '.no_accum'
-        no_accum = no_accum_file.exists()
-        
-        stop_accum_file = path / '.stop_accum'
-        stop_accum = stop_accum_file.exists()
+        no_accum = (path / '.no_accum').exists()
+        stop_accum = (path / '.stop_accum').exists()
             
         for item in natsorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name)):
-            if item.name in ignore or item.name in ['.grid_layout', '.no_accum', '.stop_accum']:
+            if item.name in ignore or item.name.startswith('.'): # Skip dotfiles in list
                 continue
             if item.is_file():
                 if item.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif', '.webp']:
@@ -184,148 +221,200 @@ def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'im
             all_images.extend(child['ai'])
             if not child.get('na', False) and not child.get('sa', False):
                 all_texts.extend(child['at'])        
-        
 
-    
     content_type = 'empty'
-    if all_images and all_texts:
-        content_type = 'mixed'
-    elif all_images:
-        content_type = 'images'
-    elif all_texts:
-        content_type = 'text'
+    if all_images and all_texts: content_type = 'mixed'
+    elif all_images: content_type = 'images'
+    elif all_texts: content_type = 'text'
     
     result = {
         'name': path.name,
         'path': str(path.relative_to('.')),
         'type': content_type,
         'children': children,
-        'ai': all_images,
+        'ai': all_images, # These are strings right now, will become objects
         'at': all_texts,
         'oi': images,
         'ot': texts,
         'na': no_accum,
         'sa': stop_accum
     }
-    
-    if grid_layout:
-        result['grid_layout'] = grid_layout
-    
+    if grid_layout: result['grid_layout'] = grid_layout
     return result
-
-# ==========================================
-# EXECUTION
-# ==========================================
 
 root = scan_folder(Path('.'))
 
-all_image_paths = []
-def collect_images(node):
-    all_image_paths.extend(node['oi'])
-    for child in node['children']:
-        collect_images(child)
-collect_images(root)
+# ==========================================
+# FLATTENING AND CONFIG ASSIGNMENT
+# ==========================================
 
-all_image_paths = natsorted(all_image_paths)
+all_image_items = [] # Will store tuples: (path, config)
+
+def collect_images_with_config(node, parent_config):
+    # Resolve config for this node (check for overrides)
+    node_path = Path(node['path'])
+    current_config = parse_custom_processing(node_path, parent_config)
+    
+    # Store config with each *original* image in this node
+    for img_path in node['oi']:
+        all_image_items.append({
+            'path': img_path,
+            'conf': current_config
+        })
+        
+    # Recurse
+    for child in node['children']:
+        collect_images_with_config(child, current_config)
+
+collect_images_with_config(root, DEFAULTS)
+
+# Sort images by SPRITE_SIZE to group them for efficient packing
+# Secondary sort by path to keep order predictable
+all_image_items.sort(key=lambda x: (x['conf']['SPRITE_SIZE'], x['path']))
+
+# ==========================================
+# SPRITESHEET GENERATION
+# ==========================================
 
 Path('spritesheets').mkdir(exist_ok=True)
 for file in Path('spritesheets').glob('*'):
     file.unlink()
 
-sprite_data = {}
+sprite_data = {} # Map: path -> data
 sheet_idx = 0
+current_sheet_size = 0 # To track if we need a new sheet for a different resolution
+sheet = None
 slot_idx = 0
-sheet = Image.new('RGBA', (SPRITESHEET_SIZE, SPRITESHEET_SIZE), (0, 0, 0, 0))
 
-for idx, img_path in enumerate(all_image_paths):
+for item in all_image_items:
+    img_path = item['path']
+    conf = item['conf']
+    
+    target_size = conf['SPRITE_SIZE']
+    sheet_dim = conf['SPRITESHEET_SIZE']
+    
+    # If resolution changes or sheet is full, save and start new
+    sprites_per_row = sheet_dim // target_size
+    sprites_per_sheet = sprites_per_row * sprites_per_row
+    
+    if sheet is None or target_size != current_sheet_size or slot_idx >= sprites_per_sheet:
+        if sheet is not None:
+            sheet.save(f'spritesheets/sprites_{sheet_idx}.{DEFAULTS["SPRITESHEET_FORMAT"]}')
+            sheet_idx += 1
+        
+        sheet = Image.new('RGBA', (sheet_dim, sheet_dim), (0, 0, 0, 0))
+        slot_idx = 0
+        current_sheet_size = target_size
+
+    # Determine GIF Speed (0.0 = 500ms, 1.0 = 20ms)
+    # Linear interpolation
+    speed_val = max(0.0, min(1.0, conf['GIF_SPEED']))
+    gif_delay_ms = int(500 - (speed_val * 480))
+
     is_gif = img_path.lower().endswith('.gif')
     
     if is_gif:
-        gif = Image.open(img_path)
-        frame_count = min(gif.n_frames,MAX_GIF_FRAMES) 
-        
-        if slot_idx + frame_count > SPRITES_PER_SHEET:
-            if slot_idx > 0:
-                sheet.save(f'spritesheets/sprites_{sheet_idx}.{SPRITESHEET_FORMAT}')
-            sheet_idx += 1
-            slot_idx = 0
-            sheet = Image.new('RGBA', (SPRITESHEET_SIZE, SPRITESHEET_SIZE), (0, 0, 0, 0))
-        
-        start_idx = slot_idx
-        for frame_idx in range(frame_count):
-            gif.seek(frame_idx)
-            frame = gif.convert('RGBA')
-            frame = resize_image(frame)
-            frame = apply_filter(frame)           
- 
-            col = slot_idx % SPRITES_PER_ROW
-            row = slot_idx // SPRITES_PER_ROW
-            x = col * SPRITE_SIZE + SPRITE_PADDING
-            y = row * SPRITE_SIZE + SPRITE_PADDING
-            sheet.paste(frame, (x, y))
-            slot_idx += 1
-        
-        sprite_data[img_path] = {
-            'ss': f'spritesheets/sprites_{sheet_idx}.{SPRITESHEET_FORMAT}',
-            'si': start_idx,
-            'fc': frame_count,
-            'anim': True,
-            'w': SPRITE_SIZE,
-            'h': SPRITE_SIZE,
-            'gi': idx,
-            'path': img_path
-        }
-    else:
-        img = Image.open(img_path).convert('RGBA')
-        img = resize_image(img)
-        img = apply_filter(img)       
-
- 
-        col = slot_idx % SPRITES_PER_ROW
-        row = slot_idx // SPRITES_PER_ROW
-        x = col * SPRITE_SIZE + SPRITE_PADDING
-        y = row * SPRITE_SIZE + SPRITE_PADDING
-        sheet.paste(img, (x, y))
-        
-        sprite_data[img_path] = {
-            'ss': f'spritesheets/sprites_{sheet_idx}.{SPRITESHEET_FORMAT}',
-            'idx': slot_idx,
-            'gi': idx,
-            'w': img.width,
-            'h': img.height,
-            'path': img_path
-        }
-        slot_idx += 1
+        try:
+            gif = Image.open(img_path)
+            frame_count = min(gif.n_frames, conf['MAX_GIF_FRAMES']) 
+            
+            # Ensure GIF fits in current sheet, else split
+            if slot_idx + frame_count > sprites_per_sheet:
+                sheet.save(f'spritesheets/sprites_{sheet_idx}.{DEFAULTS["SPRITESHEET_FORMAT"]}')
+                sheet_idx += 1
+                sheet = Image.new('RGBA', (sheet_dim, sheet_dim), (0, 0, 0, 0))
+                slot_idx = 0
+            
+            start_idx = slot_idx
+            for frame_idx in range(frame_count):
+                gif.seek(frame_idx)
+                frame = gif.convert('RGBA')
+                frame = resize_image(frame, target_size)
+                frame = apply_filter(frame, conf)           
     
-    if slot_idx >= SPRITES_PER_SHEET:
-        sheet.save(f'spritesheets/sprites_{sheet_idx}.{SPRITESHEET_FORMAT}')
-        sheet_idx += 1
-        slot_idx = 0
-        sheet = Image.new('RGBA', (SPRITESHEET_SIZE, SPRITESHEET_SIZE), (0, 0, 0, 0))
+                col = slot_idx % sprites_per_row
+                row = slot_idx // sprites_per_row
+                x = col * target_size + conf['SPRITE_PADDING']
+                y = row * target_size + conf['SPRITE_PADDING']
+                sheet.paste(frame, (x, y))
+                slot_idx += 1
+            
+            sprite_data[img_path] = {
+                'ss': f'spritesheets/sprites_{sheet_idx}.{DEFAULTS["SPRITESHEET_FORMAT"]}',
+                'si': start_idx,
+                'fc': frame_count,
+                'anim': True,
+                'w': target_size,
+                'h': target_size,
+                'sz': target_size, # Used for UV calc
+                'gd': gif_delay_ms,
+                'path': img_path
+            }
+        except Exception as e:
+            print(f"Error processing GIF {img_path}: {e}")
+    else:
+        try:
+            img = Image.open(img_path).convert('RGBA')
+            img = resize_image(img, target_size)
+            img = apply_filter(img, conf)       
+    
+            col = slot_idx % sprites_per_row
+            row = slot_idx // sprites_per_row
+            x = col * target_size + conf['SPRITE_PADDING']
+            y = row * target_size + conf['SPRITE_PADDING']
+            sheet.paste(img, (x, y))
+            
+            sprite_data[img_path] = {
+                'ss': f'spritesheets/sprites_{sheet_idx}.{DEFAULTS["SPRITESHEET_FORMAT"]}',
+                'idx': slot_idx,
+                'w': img.width,
+                'h': img.height,
+                'sz': target_size, # Used for UV calc
+                'path': img_path
+            }
+            slot_idx += 1
+        except Exception as e:
+            print(f"Error processing Image {img_path}: {e}")
 
-if slot_idx > 0:
-    sheet.save(f'spritesheets/sprites_{sheet_idx}.{SPRITESHEET_FORMAT}')
+if sheet:
+    sheet.save(f'spritesheets/sprites_{sheet_idx}.{DEFAULTS["SPRITESHEET_FORMAT"]}')
 
-def replace_images(node):
-    node['ai'] = [sprite_data[p] for p in node['ai']]
-    node['oi'] = [sprite_data[p] for p in node['oi']]
+# Remap the tree data to point to the sprite data objects
+def replace_images_in_tree(node):
+    # Filter out images that failed to process
+    node['ai'] = [sprite_data[p] for p in node['ai'] if p in sprite_data]
+    node['oi'] = [sprite_data[p] for p in node['oi'] if p in sprite_data]
+    
+    # We must assign global indices based on the filtered list for the viewer
+    # but since 'ai' is aggregated, we can just assign a temporary index if needed.
+    # Actually, let's just rely on list order.
+    
     for child in node['children']:
-        replace_images(child)
+        replace_images_in_tree(child)
 
-replace_images(root)
+replace_images_in_tree(root)
+
+# Add global index (gi) after filtering
+all_valid_sprites = []
+def collect_valid(node):
+    all_valid_sprites.extend(node['oi'])
+    for child in node['children']:
+        collect_valid(child)
+collect_valid(root)
+for i, s in enumerate(all_valid_sprites):
+    s['gi'] = i
 
 sprite_config = {
-    'spritesheet_size': SPRITESHEET_SIZE,
-    'sprite_size': SPRITE_SIZE,
-    'sprite_padding': SPRITE_PADDING,
-    'sprites_per_row': SPRITES_PER_ROW,
-    'stack_spacing': STACK_SPACING,
-    'seed': SEED,
-    'loadingscreen_img_increment': LOADINGSCREEN_IMG_INCREMENT,
-    'ordered_grid_layout': ORDERED_GRID_LAYOUT,
-    'rotation_speed': ROTATION_SPEED,
-    'random_textdiv_position': RANDOM_TEXTDIV_POSITION,
-    'quickload_threshold': QUICKLOAD_THRESHOLD 
+    'spritesheet_size': DEFAULTS['SPRITESHEET_SIZE'],
+    # 'sprite_size' is no longer global!
+    'sprite_padding': DEFAULTS['SPRITE_PADDING'],
+    'stack_spacing': DEFAULTS['STACK_SPACING'],
+    'seed': DEFAULTS['SEED'],
+    'loadingscreen_img_increment': DEFAULTS['LOADINGSCREEN_IMG_INCREMENT'],
+    'ordered_grid_layout': DEFAULTS['ORDERED_GRID_LAYOUT'],
+    'rotation_speed': DEFAULTS['ROTATION_SPEED'],
+    'random_textdiv_position': DEFAULTS['RANDOM_TEXTDIV_POSITION'],
+    'quickload_threshold': DEFAULTS['QUICKLOAD_THRESHOLD']
 }
 
 with open('data.json', 'w') as f:
@@ -457,7 +546,6 @@ const spritesheets = {{}};
 const pendingLoads = {{}};
 const textureCache = {{}};
 const stackMaterialCache = {{}};
-const geometryCache = {{}};
 
 function seededRandom(seed) {{
     let state = seed;
@@ -478,7 +566,7 @@ async function loadSpritesheet(path) {{
         loader.load(path, (texture) => {{
             texture.minFilter = THREE.NearestFilter;
             texture.magFilter = THREE.NearestFilter;
-            texture.generateMipmaps = false; // Optimization: No mipmaps for pixel art
+            texture.generateMipmaps = false;
             textureCache[path] = texture;
             delete pendingLoads[path];
             progress.ss++;
@@ -494,7 +582,7 @@ function getStackMaterial(texturePath, stackName) {{
     if (!stackMaterialCache[key]) {{
         stackMaterialCache[key] = new THREE.MeshBasicMaterial({{
             map: textureCache[texturePath],
-            side: THREE.DoubleSide, // Merged geo sometimes needs double side if rotated strictly
+            side: THREE.DoubleSide,
             transparent: true,
             alphaTest: 0.1,
             opacity: 1
@@ -600,22 +688,18 @@ function disposeScene(sceneData) {{
     if (sceneData.scene) {{
         sceneData.scene.traverse((object) => {{
             if (object.geometry) object.geometry.dispose();
-            // Materials are cached globally, so we don't dispose them here to allow reuse
         }});
         sceneData.scene.clear();
     }}
 }}
 
 async function createThreeScene(container, images, node) {{
-    console.log('[createThreeScene] START for node:', node.name, 'images:', images.length);
     const scene = new THREE.Scene();
     const grouped = {{}};
     const stackGroups = {{}};
 
     const SPRITESHEET_SIZE = spriteConfig.spritesheet_size;
-    const SPRITE_SIZE = spriteConfig.sprite_size;
     const SPRITE_PADDING = spriteConfig.sprite_padding;
-    const SPRITES_PER_ROW = spriteConfig.sprites_per_row;
     const STACK_SPACING = spriteConfig.stack_spacing;
     const SEED = spriteConfig.seed;
     const ORDERED_GRID_LAYOUT = spriteConfig.ordered_grid_layout;
@@ -631,7 +715,7 @@ async function createThreeScene(container, images, node) {{
     
     const folders = Object.keys(grouped);
     folders.forEach(folder => {{
-        grouped[folder].sort((a, b) => a.global_index - b.global_index);
+        grouped[folder].sort((a, b) => a.gi - b.gi);
     }});
    
     progress.imgsTotal += images.length;
@@ -655,34 +739,23 @@ async function createThreeScene(container, images, node) {{
         offsetX = (cols - 1) * spacing / 2;
         offsetZ = (rows - 1) * spacing / 2;
     }} else {{
+        // ... (Existing Auto-Layout Logic) ...
         gridGroups = [];
         const processedFolders = new Set();
-        
         function collectGridChildren(n) {{
             if (n.grid_layout && n.ai.length > 0) {{
                 const childFolders = folders.filter(f => f.startsWith(n.path + '/') || f === n.path);
                 const [gCols, gRows] = ORDERED_GRID_LAYOUT ? n.grid_layout.split('x').map(Number) : [1, 1];
-                gridGroups.push({{
-                    folders: childFolders,
-                    cols: gCols,
-                    rows: gRows,
-                    path: n.path
-                }});
+                gridGroups.push({{ folders: childFolders, cols: gCols, rows: gRows, path: n.path }});
                 childFolders.forEach(f => processedFolders.add(f));
             }} else if (n.children.length > 0) {{
                 n.children.forEach(child => collectGridChildren(child));
             }} else if (n.ai.length > 0) {{
                 const childFolders = folders.filter(f => f.startsWith(n.path + '/') || f === n.path);
-                gridGroups.push({{
-                    folders: childFolders,
-                    cols: 1,
-                    rows: 1,
-                    path: n.path
-                }});
+                gridGroups.push({{ folders: childFolders, cols: 1, rows: 1, path: n.path }});
                 childFolders.forEach(f => processedFolders.add(f));
             }}
         }}
-        
         node.children.forEach(child => collectGridChildren(child));
         
         if (gridGroups.length > 0) {{
@@ -741,18 +814,16 @@ async function createThreeScene(container, images, node) {{
         }}
     }}
 
+    // Calculate Bounds
     let minX = Infinity, maxX = -Infinity;
     let minZ = Infinity, maxZ = -Infinity;
-    
     const calculateBounds = (x, z) => {{
         minX = Math.min(minX, x);
         maxX = Math.max(maxX, x);
         minZ = Math.min(minZ, z);
         maxZ = Math.max(maxZ, z);
     }};
-
-    // Pre-calculate positions
-    const folderPositions = {{}}; // folderName -> {{x, z}}
+    const folderPositions = {{}};
     
     if (node.grid_layout) {{
         folders.forEach((folder, stackIdx) => {{
@@ -792,7 +863,7 @@ async function createThreeScene(container, images, node) {{
     const margin = 15;
     const baseFrustumSize = maxDim + margin;
 
-    const seed = images.map(img => img.global_index).reduce((a, b) => a + b, 0);
+    const seed = images.map(img => img.gi).reduce((a, b) => a + b, 0);
     const rand = seededRandom(seed * SEED);
     const randomZoom = rand < 0.33 ? 0.1 : rand < 0.66 ? 1 : 0.1;
     const frustumSize = baseFrustumSize * randomZoom;
@@ -817,9 +888,9 @@ async function createThreeScene(container, images, node) {{
     renderer.setClearColor(0x000000);
     container.appendChild(renderer.domElement);
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enablePan = false;
+    //controls.enablePan = false;
 
-    // ... Buttons setup (Top, Right, Bottom, Left) ...
+    // Buttons
     const navButtons = document.createElement('div');
     navButtons.style.cssText = 'position:absolute;top:5px;right:5px;display:flex;gap:5px;z-index:100';
     const createButton = () => {{
@@ -889,7 +960,6 @@ async function createThreeScene(container, images, node) {{
 
     const stackLabels = [];
     let currentFocusedParent = null;
-
     function focusStackGroup(parentFolder) {{
         if (currentFocusedParent === parentFolder) {{
             unfocusAll();
@@ -905,7 +975,6 @@ async function createThreeScene(container, images, node) {{
             currentFocusedParent = parentFolder;
         }}
     }}
-
     function unfocusAll() {{
         for (const [folder, data] of Object.entries(stackGroups)) {{
             data.material.opacity = 1.0;
@@ -913,8 +982,6 @@ async function createThreeScene(container, images, node) {{
     }}
 
     const loadingPromise = (async () => {{
-        console.log('[createThreeScene] Beginning loading for:', node.name);
-        
         const allSpritesheets = new Set();
         folders.forEach(folder => {{
             grouped[folder].forEach(img => allSpritesheets.add(img.ss));
@@ -922,7 +989,6 @@ async function createThreeScene(container, images, node) {{
         
         await Promise.all([...allSpritesheets].map(ss => loadSpritesheet(ss)));
         
-        // MAIN GENERATION LOOP
         for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {{
             const folderName = folders[stackIdx];
             const stackImages = grouped[folderName];
@@ -932,9 +998,6 @@ async function createThreeScene(container, images, node) {{
 
             const stackGroup = new THREE.Group();
             let stackMaterial = null;
-            
-            // Optimization: Bucket geometries by spritesheet
-            // Key: Spritesheet Path -> Value: Array of Geometries to merge
             const mergeBuckets = {{}};
             const animObjects = [];
 
@@ -946,7 +1009,6 @@ async function createThreeScene(container, images, node) {{
                 const height = 1.5;
                 const width = height * aspect;
 
-                // 3D Transform Logic
                 const y = i * STACK_SPACING;
                 const matrix = new THREE.Matrix4();
                 const position = new THREE.Vector3(xPos, y, zPos);
@@ -954,22 +1016,29 @@ async function createThreeScene(container, images, node) {{
                 const quaternion = new THREE.Quaternion().setFromEuler(rotation);
                 const scale = new THREE.Vector3(width, height, 1);
                 matrix.compose(position, quaternion, scale);
+                
+                // Calculate UVs based on the IMAGE SPECIFIC sprite size
+                const currentSpriteSize = imgData.sz; 
+                const SPRITES_PER_ROW = Math.floor(SPRITESHEET_SIZE / currentSpriteSize);
 
                 if (imgData.anim) {{
-                    // Animations cannot be merged easily because UVs change
                     const mesh = new THREE.Mesh(baseGeometry.clone(), stackMaterial);
-                    mesh.applyMatrix4(matrix); // Apply calc pos/rot/scale
+                    mesh.applyMatrix4(matrix);
                     
-                    mesh.userData = {{ imgData: imgData, spritesheet: imgData.ss }};
+                    mesh.userData = {{ imgData: imgData, spritesheet: imgData.ss, spritesPerRow: SPRITES_PER_ROW }};
                     mesh.onBeforeRender = function() {{
-                        const frame = Math.floor(Date.now() / 100) % this.userData.imgData.fc;
+                        const frame = Math.floor(Date.now() / this.userData.imgData.gd) % this.userData.imgData.fc;
                         const idx = this.userData.imgData.si + frame;
-                        const sprite_col = idx % SPRITES_PER_ROW;
-                        const sprite_row = Math.floor(idx / SPRITES_PER_ROW);
-                        const u_start = (sprite_col * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
-                        const u_end = u_start + SPRITE_SIZE / SPRITESHEET_SIZE;
-                        const v_start = 1 - ((sprite_row + 1) * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
-                        const v_end = 1 - (sprite_row * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const rowLen = this.userData.spritesPerRow;
+                        const sprite_col = idx % rowLen;
+                        const sprite_row = Math.floor(idx / rowLen);
+                        
+                        const size = this.userData.imgData.sz;
+                        const u_start = (sprite_col * size + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const u_end = u_start + size / SPRITESHEET_SIZE;
+                        const v_start = 1 - ((sprite_row + 1) * size + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const v_end = 1 - (sprite_row * size + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        
                         const uvs = this.geometry.attributes.uv;
                         uvs.setXY(0, u_start, v_end);
                         uvs.setXY(1, u_end, v_end);
@@ -979,20 +1048,18 @@ async function createThreeScene(container, images, node) {{
                     }};
                     animObjects.push(mesh);
                 }} else {{
-                    // Static images: prepare for merging
                     if (!mergeBuckets[imgData.ss]) mergeBuckets[imgData.ss] = [];
                     
                     const geometry = baseGeometry.clone();
-                    geometry.applyMatrix4(matrix); // Bake position/rotation/scale into vertices
+                    geometry.applyMatrix4(matrix);
                     
-                    // Set UVs for this specific sprite
                     const idx = imgData.idx;
                     const sprite_col = idx % SPRITES_PER_ROW;
                     const sprite_row = Math.floor(idx / SPRITES_PER_ROW);
-                    const u_start = (sprite_col * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                    const u_start = (sprite_col * currentSpriteSize + SPRITE_PADDING) / SPRITESHEET_SIZE;
                     const u_end = u_start + imgData.w / SPRITESHEET_SIZE;
-                    const v_start = 1 - ((sprite_row + 1) * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
-                    const v_end = 1 - (sprite_row * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                    const v_start = 1 - ((sprite_row + 1) * currentSpriteSize + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                    const v_end = 1 - (sprite_row * currentSpriteSize + SPRITE_PADDING) / SPRITESHEET_SIZE;
                     
                     const uvs = geometry.attributes.uv;
                     uvs.setXY(0, u_start, v_end);
@@ -1002,27 +1069,20 @@ async function createThreeScene(container, images, node) {{
                     
                     mergeBuckets[imgData.ss].push(geometry);
                 }}
-                
                 loadedImages++;
                 progress.imgs++;
             }}
 
-            // Perform Merging
             for (const [ss, geoms] of Object.entries(mergeBuckets)) {{
                 if (geoms.length > 0) {{
                     const mergedGeo = BufferGeometryUtils.mergeBufferGeometries(geoms);
                     const mat = getStackMaterial(ss, folderName);
                     const mesh = new THREE.Mesh(mergedGeo, mat);
                     stackGroup.add(mesh);
-                    
-                    // Cleanup individual geoms
                     geoms.forEach(g => g.dispose());
                 }}
             }}
-            
-            // Add animations
             animObjects.forEach(obj => stackGroup.add(obj));
-
             scene.add(stackGroup);
             stackGroups[folderName] = {{ group: stackGroup, material: stackMaterial }};
 
@@ -1031,16 +1091,13 @@ async function createThreeScene(container, images, node) {{
             progress.stacks++;
             if (progress.stacks % 5 === 0) await updateLoaderAsync();
 
-            // Labels (unchanged logic, just positioned)
+            // Label Logic
             const topY = (stackImages.length - 1) * STACK_SPACING;
             const worldPos = new THREE.Vector3(xPos, topY, zPos);
             const label = document.createElement('span');
-
             const currentPath = currentNode ? currentNode.path : '';
             const currentFolderName = currentPath ? currentPath.split('/').pop() : '';
-            const relativePath = folderName.startsWith(currentPath) && currentPath 
-                ? folderName.slice(currentPath.length + 1) 
-                : folderName;
+            const relativePath = folderName.startsWith(currentPath) && currentPath ? folderName.slice(currentPath.length + 1) : folderName;
             const pathParts = relativePath.split('/').filter(p => p);
             const displayParts = currentPath ? ['..', currentFolderName, ...pathParts] : pathParts;
 
@@ -1066,7 +1123,6 @@ async function createThreeScene(container, images, node) {{
             label.style.cssText = 'position:absolute;pointer-events:none;cursor:pointer;color:white;font-family:monospace;font-size:11px;';
             label.addEventListener('wheel', (e) => {{ e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }}, {{ passive: false }});
             labelContainer.appendChild(label);
-            
             stackLabels.push({{ element: label, position: worldPos, xPos, zPos, folderName }});
             
             label.querySelectorAll('span[data-path]').forEach(span => {{
@@ -1112,7 +1168,6 @@ async function createThreeScene(container, images, node) {{
         const rotationAngle = Date.now() * ROTATION_SPEED;
         scene.rotation.y = rotationAngle;
         
-        // Culling (every 5 frames)
         if (frameCount % 5 === 0) {{
             camera.updateMatrixWorld();
             cameraViewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
@@ -1123,8 +1178,6 @@ async function createThreeScene(container, images, node) {{
             }}
         }}
         
-        // Label Raycasting (Simplified check against bounds for speed)
-        // Optimized: Only check label visibility every 10 frames
         if (frameCount % 10 === 0) {{
             raycaster.camera = camera;
             stackLabels.forEach(({{ element, position, xPos, zPos }}) => {{
@@ -1132,21 +1185,14 @@ async function createThreeScene(container, images, node) {{
                 const rotatedX = xPos * Math.cos(rotationAngle) + zPos * Math.sin(rotationAngle);
                 const rotatedZ = -xPos * Math.sin(rotationAngle) + zPos * Math.cos(rotationAngle);
                 const rotatedPos = new THREE.Vector3(rotatedX, position.y + 0.01, rotatedZ);
-                
-                // Check if behind camera
                 const screenPos = rotatedPos.clone().project(camera);
+                
                 if (screenPos.z > 1) {{ element.style.display = 'none'; return; }}
 
-                // Simple distance check instead of full mesh raycast for massive performance gain
-                // or single raycast if really needed.
-                // Current implementation: Keep raycast but it hits MERGED geometry now (Fast!)
                 const direction = new THREE.Vector3().subVectors(camera.position, rotatedPos).normalize();
                 raycaster.set(rotatedPos, direction);
-                
-                // Raycast against Groups (which now contain just 1-2 meshes max)
                 const intersects = raycaster.intersectObjects(scene.children, true);
                 
-                // If hit something that is NOT the stack itself (approximate logic)
                 if (intersects.length > 0 && intersects[0].distance < direction.length() - 2) {{
                      element.style.display = 'none';
                 }} else {{
@@ -1177,8 +1223,6 @@ async function createThreeScene(container, images, node) {{
     window.addEventListener('resize', resizeHandler);
 
     await loadingPromise;
-    console.log('[createThreeScene] Returned from loadingPromise for:', node.name);
-    
     return sceneData;
 }}
  
@@ -1200,9 +1244,7 @@ let currentNode = null;
 let isInitialLoad = true;
 
 async function renderContent(node) {{
-    if (!isInitialLoad) {{
-        updateURL(node);
-    }}
+    if (!isInitialLoad) updateURL(node);
     const RANDOM_TEXTDIV_POSITION = spriteConfig.random_textdiv_position;
     const SEED = spriteConfig.seed;
     currentNode = node;
@@ -1214,16 +1256,11 @@ async function renderContent(node) {{
     contentDiv.innerHTML = '';
    
     const scenePromises = []; 
-    
     let children = node.children.length > 0 ? node.children : [node];
-    
     children = children.map(child => {{
-        if (child.sa || node.sa) {{
-            return {{ ...child, at: [] }};
-        }}
+        if (child.sa || node.sa) return {{ ...child, at: [] }};
         return child;
     }});
-    
     children = children.filter(child => child.ai.length > 0 || child.at.length > 0);
     
     const count = children.length;
@@ -1287,18 +1324,14 @@ async function renderContent(node) {{
                 if (currentNode && currentNode.path) {{
                     const parentPath = currentNode.path.split('/').slice(0, -1).join('/');
                     const parentNode = findNodeByPath(dataTree, parentPath) || dataTree;
-                    if (parentNode && parentNode.at.length > 0) {{
-                        renderContent(parentNode);
-                    }}
+                    if (parentNode && parentNode.at.length > 0) renderContent(parentNode);
                 }}
             }};
             
             navRight.onclick = () => {{
                 if (currentNode && currentNode.children && currentNode.children.length > 0) {{
                     const firstChildWithText = currentNode.children.find(c => c.at.length > 0);
-                    if (firstChildWithText) {{
-                        renderContent(firstChildWithText);
-                    }}
+                    if (firstChildWithText) renderContent(firstChildWithText);
                 }}
             }};
             
@@ -1311,32 +1344,21 @@ async function renderContent(node) {{
             if (RANDOM_TEXTDIV_POSITION) {{
                 const seed = child.path.split('').reduce((a, c) => a + c.charCodeAt(0), 0) * SEED;
                 const rand = seededRandom(seed);
-                if (rand < 0.5) {{
-                    div.appendChild(textDiv);
-                    div.appendChild(imgDiv);
-                }} else {{
-                    div.appendChild(imgDiv);
-                    div.appendChild(textDiv);
-                }}
+                if (rand < 0.5) {{ div.appendChild(textDiv); div.appendChild(imgDiv); }}
+                else {{ div.appendChild(imgDiv); div.appendChild(textDiv); }}
             }} else {{
-                div.appendChild(textDiv);
-                div.appendChild(imgDiv);
+                div.appendChild(textDiv); div.appendChild(imgDiv);
             }} 
-
             div._sceneContainer = imgDiv;
             div._sceneChild = child;
-
         }} else if (child.ai.length > 0) {{
             div._sceneContainer = div;
             div._sceneChild = child;
-
         }} else if (child.at.length > 0) {{
             div.className = 'content-div text-content';
             div.style.position = 'relative';
             let htmlContent = '';
-            for (const path of child.at) {{
-                htmlContent += await loadText(path);
-            }}
+            for (const path of child.at) {{ htmlContent += await loadText(path); }}
             
             const pathParts = child.path.split('/');
             const labelHtml = pathParts.map((part, idx) => {{
@@ -1351,7 +1373,6 @@ async function renderContent(node) {{
             }}).join('/');
             
             const navHtml = `<div style="position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;background:black;padding:2px 5px;border:1px solid white"><span style="cursor:pointer;padding:0 5px;user-select:none;color:#4af" class="text-nav-left">&#60;</span><span style="padding:0 2px">texts</span><span style="cursor:pointer;padding:0 5px;user-select:none;color:#4af" class="text-nav-right">&#62;</span></div>`;
-            
             div.innerHTML = htmlContent + '<style>.div-label {{ position: absolute; top: 5px; left: 5px; background: black; padding: 2px 5px; border: 1px solid white; z-index: 100; pointer-events: auto; }}</style><div class="div-label">' + labelHtml + '</div>' + navHtml;
             
             const textLabel = div.querySelector('.div-label');
@@ -1362,40 +1383,30 @@ async function renderContent(node) {{
                     if (node) renderContent(node);
                 }};
             }});
-            
             const navLeft = div.querySelector('.text-nav-left');
             const navRight = div.querySelector('.text-nav-right');
-            
             navLeft.onclick = () => {{
                 if (currentNode && currentNode.path) {{
                     const parentPath = currentNode.path.split('/').slice(0, -1).join('/');
                     const parentNode = findNodeByPath(dataTree, parentPath) || dataTree;
-                    if (parentNode && parentNode.at.length > 0) {{
-                        renderContent(parentNode);
-                    }}
+                    if (parentNode && parentNode.at.length > 0) renderContent(parentNode);
                 }}
             }};
-            
             navRight.onclick = () => {{
                 if (currentNode && currentNode.children && currentNode.children.length > 0) {{
                     const firstChildWithText = currentNode.children.find(c => c.at.length > 0);
-                    if (firstChildWithText) {{
-                        renderContent(firstChildWithText);
-                    }}
+                    if (firstChildWithText) renderContent(firstChildWithText);
                 }}
             }};
         }}
-
         contentDiv.appendChild(div);
     }}
 
     await new Promise(resolve => requestAnimationFrame(resolve));
-
     const sceneDivs = Array.from(contentDiv.children).filter(d => d._sceneContainer);
     for (const div of sceneDivs) {{
         scenePromises.push(createThreeScene(div._sceneContainer, div._sceneChild.ai, div._sceneChild));
     }}
-
     await Promise.all(scenePromises);
     return Promise.resolve();
 }}

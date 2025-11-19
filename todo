@@ -33,8 +33,27 @@ apply to iaac, madrid, rmit, mit everywhere
 
 --------
 
+.custom_processing
+Variable,Type,Example Values
+SHARPEN,Bool,True or False
+SHARPEN_RADIUS,Int,2
+SHARPEN_PERCENT,Int,100
+SHARPEN_THRESHOLD,Int,3
+GAUSSIAN_BLUR,Bool,True or False
+GAUSSIAN_BLUR_RADIUS,Int,2
+COLOR_TO_TRANSPARENT,String,"'blue', 'black', 'magenta', 'white'"
+COLOR_THRESHOLD,Int,30 (0-255 tolerance)
+DITHERING,Bool,True or False
+DITHER_MODE,String,"'bw', 'color_reduce', 'custom_palette'"
+DITHER_METHOD,String,"'ordered', 'floyd_steinberg', 'none'"
+DITHER_COLORS,Int,256 (Only used if mode is 'color_reduce')
+CUSTOM_PALETTE,List,"['#ffffff', '#000000']"
+MAX_GIF_FRAMES,Int,30
+GIF_SPEED,Float,0.5 (Range 0.0 to 1.0)
 
 
+
+if a gid frames is longer then the spreadsheet, it does not work properly.
 
 ⭐⭐ ⭐ ⭐     there should be a reason for the stack. why do you want to go all the way down to the lowest child.
 
@@ -48,16 +67,12 @@ dot file for custom post processing. standard does nothing, but for some imagest
 .hidden should also be a dot file, perhaps i already implemented it ?
 .text_image file that, when found, makes a text image on and below every stack and gives it a name like 00_text.png and ZZ_text.png so it is automatically assigned, we dont need to worry about that.
 
-optimalisation:
-custom frustum culling but no culling height. if stack is too highj it also goes away.
-single sided material
-
+test gifs
 
 
 
 ui ux bug
 ⭐ ⭐ ⭐ make global var for if > 1000 then load instant, if not, load gradual
-loadingscreen starts up foirst with white line, weird. investigate 
 show in the treeview where the .stop_accum files ar red dot?
 zoom levels adjust , + also i dont think they are influenced by boundingbox
 fucking root is not accurate.
@@ -96,6 +111,7 @@ a lot of work, ventralize the the treeview
 
 
 in progress-------------------------
+loadingscreen starts up foirst with white line, weird. investigate 
 zoom, tooslow
 	scroll buttons
 make it browser comaptible. chromium works ok, firefor and safari needs testin

@@ -119,7 +119,6 @@ const spritesheets = {};
 const pendingLoads = {};
 const textureCache = {};
 const stackMaterialCache = {};
-const geometryCache = {};
 
 function seededRandom(seed) {
     let state = seed;
@@ -140,7 +139,7 @@ async function loadSpritesheet(path) {
         loader.load(path, (texture) => {
             texture.minFilter = THREE.NearestFilter;
             texture.magFilter = THREE.NearestFilter;
-            texture.generateMipmaps = false; // Optimization: No mipmaps for pixel art
+            texture.generateMipmaps = false;
             textureCache[path] = texture;
             delete pendingLoads[path];
             progress.ss++;
@@ -156,7 +155,7 @@ function getStackMaterial(texturePath, stackName) {
     if (!stackMaterialCache[key]) {
         stackMaterialCache[key] = new THREE.MeshBasicMaterial({
             map: textureCache[texturePath],
-            side: THREE.DoubleSide, // Merged geo sometimes needs double side if rotated strictly
+            side: THREE.DoubleSide,
             transparent: true,
             alphaTest: 0.1,
             opacity: 1
@@ -262,22 +261,18 @@ function disposeScene(sceneData) {
     if (sceneData.scene) {
         sceneData.scene.traverse((object) => {
             if (object.geometry) object.geometry.dispose();
-            // Materials are cached globally, so we don't dispose them here to allow reuse
         });
         sceneData.scene.clear();
     }
 }
 
 async function createThreeScene(container, images, node) {
-    console.log('[createThreeScene] START for node:', node.name, 'images:', images.length);
     const scene = new THREE.Scene();
     const grouped = {};
     const stackGroups = {};
 
     const SPRITESHEET_SIZE = spriteConfig.spritesheet_size;
-    const SPRITE_SIZE = spriteConfig.sprite_size;
     const SPRITE_PADDING = spriteConfig.sprite_padding;
-    const SPRITES_PER_ROW = spriteConfig.sprites_per_row;
     const STACK_SPACING = spriteConfig.stack_spacing;
     const SEED = spriteConfig.seed;
     const ORDERED_GRID_LAYOUT = spriteConfig.ordered_grid_layout;
@@ -293,7 +288,7 @@ async function createThreeScene(container, images, node) {
     
     const folders = Object.keys(grouped);
     folders.forEach(folder => {
-        grouped[folder].sort((a, b) => a.global_index - b.global_index);
+        grouped[folder].sort((a, b) => a.gi - b.gi);
     });
    
     progress.imgsTotal += images.length;
@@ -317,34 +312,23 @@ async function createThreeScene(container, images, node) {
         offsetX = (cols - 1) * spacing / 2;
         offsetZ = (rows - 1) * spacing / 2;
     } else {
+        // ... (Existing Auto-Layout Logic) ...
         gridGroups = [];
         const processedFolders = new Set();
-        
         function collectGridChildren(n) {
             if (n.grid_layout && n.ai.length > 0) {
                 const childFolders = folders.filter(f => f.startsWith(n.path + '/') || f === n.path);
                 const [gCols, gRows] = ORDERED_GRID_LAYOUT ? n.grid_layout.split('x').map(Number) : [1, 1];
-                gridGroups.push({
-                    folders: childFolders,
-                    cols: gCols,
-                    rows: gRows,
-                    path: n.path
-                });
+                gridGroups.push({ folders: childFolders, cols: gCols, rows: gRows, path: n.path });
                 childFolders.forEach(f => processedFolders.add(f));
             } else if (n.children.length > 0) {
                 n.children.forEach(child => collectGridChildren(child));
             } else if (n.ai.length > 0) {
                 const childFolders = folders.filter(f => f.startsWith(n.path + '/') || f === n.path);
-                gridGroups.push({
-                    folders: childFolders,
-                    cols: 1,
-                    rows: 1,
-                    path: n.path
-                });
+                gridGroups.push({ folders: childFolders, cols: 1, rows: 1, path: n.path });
                 childFolders.forEach(f => processedFolders.add(f));
             }
         }
-        
         node.children.forEach(child => collectGridChildren(child));
         
         if (gridGroups.length > 0) {
@@ -403,18 +387,16 @@ async function createThreeScene(container, images, node) {
         }
     }
 
+    // Calculate Bounds
     let minX = Infinity, maxX = -Infinity;
     let minZ = Infinity, maxZ = -Infinity;
-    
     const calculateBounds = (x, z) => {
         minX = Math.min(minX, x);
         maxX = Math.max(maxX, x);
         minZ = Math.min(minZ, z);
         maxZ = Math.max(maxZ, z);
     };
-
-    // Pre-calculate positions
-    const folderPositions = {}; // folderName -> {x, z}
+    const folderPositions = {};
     
     if (node.grid_layout) {
         folders.forEach((folder, stackIdx) => {
@@ -454,7 +436,7 @@ async function createThreeScene(container, images, node) {
     const margin = 15;
     const baseFrustumSize = maxDim + margin;
 
-    const seed = images.map(img => img.global_index).reduce((a, b) => a + b, 0);
+    const seed = images.map(img => img.gi).reduce((a, b) => a + b, 0);
     const rand = seededRandom(seed * SEED);
     const randomZoom = rand < 0.33 ? 0.1 : rand < 0.66 ? 1 : 0.1;
     const frustumSize = baseFrustumSize * randomZoom;
@@ -479,9 +461,9 @@ async function createThreeScene(container, images, node) {
     renderer.setClearColor(0x000000);
     container.appendChild(renderer.domElement);
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enablePan = false;
+    //controls.enablePan = false;
 
-    // ... Buttons setup (Top, Right, Bottom, Left) ...
+    // Buttons
     const navButtons = document.createElement('div');
     navButtons.style.cssText = 'position:absolute;top:5px;right:5px;display:flex;gap:5px;z-index:100';
     const createButton = () => {
@@ -551,7 +533,6 @@ async function createThreeScene(container, images, node) {
 
     const stackLabels = [];
     let currentFocusedParent = null;
-
     function focusStackGroup(parentFolder) {
         if (currentFocusedParent === parentFolder) {
             unfocusAll();
@@ -567,7 +548,6 @@ async function createThreeScene(container, images, node) {
             currentFocusedParent = parentFolder;
         }
     }
-
     function unfocusAll() {
         for (const [folder, data] of Object.entries(stackGroups)) {
             data.material.opacity = 1.0;
@@ -575,8 +555,6 @@ async function createThreeScene(container, images, node) {
     }
 
     const loadingPromise = (async () => {
-        console.log('[createThreeScene] Beginning loading for:', node.name);
-        
         const allSpritesheets = new Set();
         folders.forEach(folder => {
             grouped[folder].forEach(img => allSpritesheets.add(img.ss));
@@ -584,7 +562,6 @@ async function createThreeScene(container, images, node) {
         
         await Promise.all([...allSpritesheets].map(ss => loadSpritesheet(ss)));
         
-        // MAIN GENERATION LOOP
         for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {
             const folderName = folders[stackIdx];
             const stackImages = grouped[folderName];
@@ -594,9 +571,6 @@ async function createThreeScene(container, images, node) {
 
             const stackGroup = new THREE.Group();
             let stackMaterial = null;
-            
-            // Optimization: Bucket geometries by spritesheet
-            // Key: Spritesheet Path -> Value: Array of Geometries to merge
             const mergeBuckets = {};
             const animObjects = [];
 
@@ -608,7 +582,6 @@ async function createThreeScene(container, images, node) {
                 const height = 1.5;
                 const width = height * aspect;
 
-                // 3D Transform Logic
                 const y = i * STACK_SPACING;
                 const matrix = new THREE.Matrix4();
                 const position = new THREE.Vector3(xPos, y, zPos);
@@ -616,22 +589,29 @@ async function createThreeScene(container, images, node) {
                 const quaternion = new THREE.Quaternion().setFromEuler(rotation);
                 const scale = new THREE.Vector3(width, height, 1);
                 matrix.compose(position, quaternion, scale);
+                
+                // Calculate UVs based on the IMAGE SPECIFIC sprite size
+                const currentSpriteSize = imgData.sz; 
+                const SPRITES_PER_ROW = Math.floor(SPRITESHEET_SIZE / currentSpriteSize);
 
                 if (imgData.anim) {
-                    // Animations cannot be merged easily because UVs change
                     const mesh = new THREE.Mesh(baseGeometry.clone(), stackMaterial);
-                    mesh.applyMatrix4(matrix); // Apply calc pos/rot/scale
+                    mesh.applyMatrix4(matrix);
                     
-                    mesh.userData = { imgData: imgData, spritesheet: imgData.ss };
+                    mesh.userData = { imgData: imgData, spritesheet: imgData.ss, spritesPerRow: SPRITES_PER_ROW };
                     mesh.onBeforeRender = function() {
-                        const frame = Math.floor(Date.now() / 100) % this.userData.imgData.fc;
+                        const frame = Math.floor(Date.now() / this.userData.imgData.gd) % this.userData.imgData.fc;
                         const idx = this.userData.imgData.si + frame;
-                        const sprite_col = idx % SPRITES_PER_ROW;
-                        const sprite_row = Math.floor(idx / SPRITES_PER_ROW);
-                        const u_start = (sprite_col * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
-                        const u_end = u_start + SPRITE_SIZE / SPRITESHEET_SIZE;
-                        const v_start = 1 - ((sprite_row + 1) * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
-                        const v_end = 1 - (sprite_row * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const rowLen = this.userData.spritesPerRow;
+                        const sprite_col = idx % rowLen;
+                        const sprite_row = Math.floor(idx / rowLen);
+                        
+                        const size = this.userData.imgData.sz;
+                        const u_start = (sprite_col * size + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const u_end = u_start + size / SPRITESHEET_SIZE;
+                        const v_start = 1 - ((sprite_row + 1) * size + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const v_end = 1 - (sprite_row * size + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        
                         const uvs = this.geometry.attributes.uv;
                         uvs.setXY(0, u_start, v_end);
                         uvs.setXY(1, u_end, v_end);
@@ -641,20 +621,18 @@ async function createThreeScene(container, images, node) {
                     };
                     animObjects.push(mesh);
                 } else {
-                    // Static images: prepare for merging
                     if (!mergeBuckets[imgData.ss]) mergeBuckets[imgData.ss] = [];
                     
                     const geometry = baseGeometry.clone();
-                    geometry.applyMatrix4(matrix); // Bake position/rotation/scale into vertices
+                    geometry.applyMatrix4(matrix);
                     
-                    // Set UVs for this specific sprite
                     const idx = imgData.idx;
                     const sprite_col = idx % SPRITES_PER_ROW;
                     const sprite_row = Math.floor(idx / SPRITES_PER_ROW);
-                    const u_start = (sprite_col * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                    const u_start = (sprite_col * currentSpriteSize + SPRITE_PADDING) / SPRITESHEET_SIZE;
                     const u_end = u_start + imgData.w / SPRITESHEET_SIZE;
-                    const v_start = 1 - ((sprite_row + 1) * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
-                    const v_end = 1 - (sprite_row * SPRITE_SIZE + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                    const v_start = 1 - ((sprite_row + 1) * currentSpriteSize + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                    const v_end = 1 - (sprite_row * currentSpriteSize + SPRITE_PADDING) / SPRITESHEET_SIZE;
                     
                     const uvs = geometry.attributes.uv;
                     uvs.setXY(0, u_start, v_end);
@@ -664,27 +642,20 @@ async function createThreeScene(container, images, node) {
                     
                     mergeBuckets[imgData.ss].push(geometry);
                 }
-                
                 loadedImages++;
                 progress.imgs++;
             }
 
-            // Perform Merging
             for (const [ss, geoms] of Object.entries(mergeBuckets)) {
                 if (geoms.length > 0) {
                     const mergedGeo = BufferGeometryUtils.mergeBufferGeometries(geoms);
                     const mat = getStackMaterial(ss, folderName);
                     const mesh = new THREE.Mesh(mergedGeo, mat);
                     stackGroup.add(mesh);
-                    
-                    // Cleanup individual geoms
                     geoms.forEach(g => g.dispose());
                 }
             }
-            
-            // Add animations
             animObjects.forEach(obj => stackGroup.add(obj));
-
             scene.add(stackGroup);
             stackGroups[folderName] = { group: stackGroup, material: stackMaterial };
 
@@ -693,16 +664,13 @@ async function createThreeScene(container, images, node) {
             progress.stacks++;
             if (progress.stacks % 5 === 0) await updateLoaderAsync();
 
-            // Labels (unchanged logic, just positioned)
+            // Label Logic
             const topY = (stackImages.length - 1) * STACK_SPACING;
             const worldPos = new THREE.Vector3(xPos, topY, zPos);
             const label = document.createElement('span');
-
             const currentPath = currentNode ? currentNode.path : '';
             const currentFolderName = currentPath ? currentPath.split('/').pop() : '';
-            const relativePath = folderName.startsWith(currentPath) && currentPath 
-                ? folderName.slice(currentPath.length + 1) 
-                : folderName;
+            const relativePath = folderName.startsWith(currentPath) && currentPath ? folderName.slice(currentPath.length + 1) : folderName;
             const pathParts = relativePath.split('/').filter(p => p);
             const displayParts = currentPath ? ['..', currentFolderName, ...pathParts] : pathParts;
 
@@ -728,7 +696,6 @@ async function createThreeScene(container, images, node) {
             label.style.cssText = 'position:absolute;pointer-events:none;cursor:pointer;color:white;font-family:monospace;font-size:11px;';
             label.addEventListener('wheel', (e) => { e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }, { passive: false });
             labelContainer.appendChild(label);
-            
             stackLabels.push({ element: label, position: worldPos, xPos, zPos, folderName });
             
             label.querySelectorAll('span[data-path]').forEach(span => {
@@ -774,7 +741,6 @@ async function createThreeScene(container, images, node) {
         const rotationAngle = Date.now() * ROTATION_SPEED;
         scene.rotation.y = rotationAngle;
         
-        // Culling (every 5 frames)
         if (frameCount % 5 === 0) {
             camera.updateMatrixWorld();
             cameraViewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
@@ -785,8 +751,6 @@ async function createThreeScene(container, images, node) {
             }
         }
         
-        // Label Raycasting (Simplified check against bounds for speed)
-        // Optimized: Only check label visibility every 10 frames
         if (frameCount % 10 === 0) {
             raycaster.camera = camera;
             stackLabels.forEach(({ element, position, xPos, zPos }) => {
@@ -794,21 +758,14 @@ async function createThreeScene(container, images, node) {
                 const rotatedX = xPos * Math.cos(rotationAngle) + zPos * Math.sin(rotationAngle);
                 const rotatedZ = -xPos * Math.sin(rotationAngle) + zPos * Math.cos(rotationAngle);
                 const rotatedPos = new THREE.Vector3(rotatedX, position.y + 0.01, rotatedZ);
-                
-                // Check if behind camera
                 const screenPos = rotatedPos.clone().project(camera);
+                
                 if (screenPos.z > 1) { element.style.display = 'none'; return; }
 
-                // Simple distance check instead of full mesh raycast for massive performance gain
-                // or single raycast if really needed.
-                // Current implementation: Keep raycast but it hits MERGED geometry now (Fast!)
                 const direction = new THREE.Vector3().subVectors(camera.position, rotatedPos).normalize();
                 raycaster.set(rotatedPos, direction);
-                
-                // Raycast against Groups (which now contain just 1-2 meshes max)
                 const intersects = raycaster.intersectObjects(scene.children, true);
                 
-                // If hit something that is NOT the stack itself (approximate logic)
                 if (intersects.length > 0 && intersects[0].distance < direction.length() - 2) {
                      element.style.display = 'none';
                 } else {
@@ -839,8 +796,6 @@ async function createThreeScene(container, images, node) {
     window.addEventListener('resize', resizeHandler);
 
     await loadingPromise;
-    console.log('[createThreeScene] Returned from loadingPromise for:', node.name);
-    
     return sceneData;
 }
  
@@ -862,9 +817,7 @@ let currentNode = null;
 let isInitialLoad = true;
 
 async function renderContent(node) {
-    if (!isInitialLoad) {
-        updateURL(node);
-    }
+    if (!isInitialLoad) updateURL(node);
     const RANDOM_TEXTDIV_POSITION = spriteConfig.random_textdiv_position;
     const SEED = spriteConfig.seed;
     currentNode = node;
@@ -876,16 +829,11 @@ async function renderContent(node) {
     contentDiv.innerHTML = '';
    
     const scenePromises = []; 
-    
     let children = node.children.length > 0 ? node.children : [node];
-    
     children = children.map(child => {
-        if (child.sa || node.sa) {
-            return { ...child, at: [] };
-        }
+        if (child.sa || node.sa) return { ...child, at: [] };
         return child;
     });
-    
     children = children.filter(child => child.ai.length > 0 || child.at.length > 0);
     
     const count = children.length;
@@ -949,18 +897,14 @@ async function renderContent(node) {
                 if (currentNode && currentNode.path) {
                     const parentPath = currentNode.path.split('/').slice(0, -1).join('/');
                     const parentNode = findNodeByPath(dataTree, parentPath) || dataTree;
-                    if (parentNode && parentNode.at.length > 0) {
-                        renderContent(parentNode);
-                    }
+                    if (parentNode && parentNode.at.length > 0) renderContent(parentNode);
                 }
             };
             
             navRight.onclick = () => {
                 if (currentNode && currentNode.children && currentNode.children.length > 0) {
                     const firstChildWithText = currentNode.children.find(c => c.at.length > 0);
-                    if (firstChildWithText) {
-                        renderContent(firstChildWithText);
-                    }
+                    if (firstChildWithText) renderContent(firstChildWithText);
                 }
             };
             
@@ -973,32 +917,21 @@ async function renderContent(node) {
             if (RANDOM_TEXTDIV_POSITION) {
                 const seed = child.path.split('').reduce((a, c) => a + c.charCodeAt(0), 0) * SEED;
                 const rand = seededRandom(seed);
-                if (rand < 0.5) {
-                    div.appendChild(textDiv);
-                    div.appendChild(imgDiv);
-                } else {
-                    div.appendChild(imgDiv);
-                    div.appendChild(textDiv);
-                }
+                if (rand < 0.5) { div.appendChild(textDiv); div.appendChild(imgDiv); }
+                else { div.appendChild(imgDiv); div.appendChild(textDiv); }
             } else {
-                div.appendChild(textDiv);
-                div.appendChild(imgDiv);
+                div.appendChild(textDiv); div.appendChild(imgDiv);
             } 
-
             div._sceneContainer = imgDiv;
             div._sceneChild = child;
-
         } else if (child.ai.length > 0) {
             div._sceneContainer = div;
             div._sceneChild = child;
-
         } else if (child.at.length > 0) {
             div.className = 'content-div text-content';
             div.style.position = 'relative';
             let htmlContent = '';
-            for (const path of child.at) {
-                htmlContent += await loadText(path);
-            }
+            for (const path of child.at) { htmlContent += await loadText(path); }
             
             const pathParts = child.path.split('/');
             const labelHtml = pathParts.map((part, idx) => {
@@ -1013,7 +946,6 @@ async function renderContent(node) {
             }).join('/');
             
             const navHtml = `<div style="position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;background:black;padding:2px 5px;border:1px solid white"><span style="cursor:pointer;padding:0 5px;user-select:none;color:#4af" class="text-nav-left">&#60;</span><span style="padding:0 2px">texts</span><span style="cursor:pointer;padding:0 5px;user-select:none;color:#4af" class="text-nav-right">&#62;</span></div>`;
-            
             div.innerHTML = htmlContent + '<style>.div-label { position: absolute; top: 5px; left: 5px; background: black; padding: 2px 5px; border: 1px solid white; z-index: 100; pointer-events: auto; }</style><div class="div-label">' + labelHtml + '</div>' + navHtml;
             
             const textLabel = div.querySelector('.div-label');
@@ -1024,40 +956,30 @@ async function renderContent(node) {
                     if (node) renderContent(node);
                 };
             });
-            
             const navLeft = div.querySelector('.text-nav-left');
             const navRight = div.querySelector('.text-nav-right');
-            
             navLeft.onclick = () => {
                 if (currentNode && currentNode.path) {
                     const parentPath = currentNode.path.split('/').slice(0, -1).join('/');
                     const parentNode = findNodeByPath(dataTree, parentPath) || dataTree;
-                    if (parentNode && parentNode.at.length > 0) {
-                        renderContent(parentNode);
-                    }
+                    if (parentNode && parentNode.at.length > 0) renderContent(parentNode);
                 }
             };
-            
             navRight.onclick = () => {
                 if (currentNode && currentNode.children && currentNode.children.length > 0) {
                     const firstChildWithText = currentNode.children.find(c => c.at.length > 0);
-                    if (firstChildWithText) {
-                        renderContent(firstChildWithText);
-                    }
+                    if (firstChildWithText) renderContent(firstChildWithText);
                 }
             };
         }
-
         contentDiv.appendChild(div);
     }
 
     await new Promise(resolve => requestAnimationFrame(resolve));
-
     const sceneDivs = Array.from(contentDiv.children).filter(d => d._sceneContainer);
     for (const div of sceneDivs) {
         scenePromises.push(createThreeScene(div._sceneContainer, div._sceneChild.ai, div._sceneChild));
     }
-
     await Promise.all(scenePromises);
     return Promise.resolve();
 }
