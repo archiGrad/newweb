@@ -17,6 +17,7 @@ luck will not come to you iof you are not willing to work for it.
 -----
 this week:
 nice clothes
+put projects in the website
 businesscards  https://www.tanabutr.co.th/en/print-on-demand-bangkok/business-card/premium-paper
 website + first projects processed and uploaded
 get a fucking job and apartment back in europm choose a place and try
@@ -32,53 +33,57 @@ apply to iaac, madrid, rmit, mit everywhere
 
 --------
 
-adjustable spritesheet maps
-post processing files for every folder. this means dot files for some stuff for custom processing
-annotations on lowest level.
-gif animation needs to be custom, not all same speed
+
+
+
+⭐⭐ ⭐ ⭐     there should be a reason for the stack. why do you want to go all the way down to the lowest child.
+
+control
+.bot file and .human file
+adjustable image reoslution..   in relation to stack dependant spritesheets. other stacks should be loaded in with different resolution. a custom resolution can be set in a dot file.
+division set in style? can be 50% if another text div is next, 100% if its the last child , when combined with a 3d scene, it shoul dbe standard 50%, unless specified in a dot file.
+dot file for custom post processing. standard does nothing, but for some imagestacks, i want dithering or sharpening, i can set these in a .process file for custom instrcutions
+.grid seperation in a dot file. every grid seperation has a standard set in global var, but can be altered by reading in a dot file. it hsould support houdini options.
+.gif animation speed should be also in a dot dile. it has a standard value but should be able to set custom
+.hidden should also be a dot file, perhaps i already implemented it ?
+.text_image file that, when found, makes a text image on and below every stack and gives it a name like 00_text.png and ZZ_text.png so it is automatically assigned, we dont need to worry about that.
+
+optimalisation:
+custom frustum culling but no culling height. if stack is too highj it also goes away.
+single sided material
 
 
 
 
-urgency  🔥
-ease of implementation ⭐
-make LOADINGSCREEN_IMG_INCREMENT a global var for loadingscren
-
-make global var for if > 1000 then load instant, if not, load gradual
-
-
-
-ui
-zoom, tooslow
-fix scrollbars
-slidable divs
-not 50% text width? too much?
-
-navigation
-add my comment back in global vars
-
-
-in loading screen, add performnt images load and spritesheets and stacks
+ui ux bug
+⭐ ⭐ ⭐ make global var for if > 1000 then load instant, if not, load gradual
+loadingscreen starts up foirst with white line, weird. investigate 
+show in the treeview where the .stop_accum files ar red dot?
+zoom levels adjust , + also i dont think they are influenced by boundingbox
+fucking root is not accurate.
+tags at bottom of texts moves when i scroll.......
+the bottons < and > bottom right does not work anymore
+redesign the stack names. does not make sense to have the whole filepath there. better 3 buttons. make other stacks invisble, go back, go forth.   ---> foldable tree view with correct loading on click, no double loeading when expanding or collapsing the tree.
+bigger font for important stuff
 no pan in 3d vieport, is not nice navigation. we should make this a constraint or somethingu
 
-show in the treeview where the .stop_accum files ar red dot?
+ui design
+ 🔥 ⭐⭐ text underneath tree?, 
+tree in the middle of screen?  🔥 ⭐ 
+floating and collapsible tree view. ⭐⭐⭐
 
-zoom levels adjust , + also i dont think they are influenced by boundingbox
-need to optimize again, i think i have too many listeners overloading memory
-fix the scrollbars, looks stupid
 
-
-bugs:
- tags at bottom of texts moves when i scroll.......
-the bottons < and > bottom right does not work anymore
-
-foldable tree view with correct loading on click, no double loeading when expanding or collapsing the tree. 🔥 ⭐⭐ text underneath tree?, tree in the middle of screen?  🔥 ⭐ floating and collapsible tree view. ⭐⭐⭐
-
-bigger font for important stuff
+maintanability
+add my comment back in global vars
 seperate styling in index 🔥  
+properly investigate the code, a lot of work
+
+
+future logic
 reconsider different packing alforithm for 2d packing
-make it browser comaptible. chromium works ok, firefor and safari needs testin
-	scroll buttons
+
+performance
+need to optimize a lot, do some proper analysis with different performnce settings
 
 make a mobile version
 a lot of work, ventralize the the treeview
@@ -88,7 +93,17 @@ a lot of work, ventralize the the treeview
 
 
 
+
+
 in progress-------------------------
+zoom, tooslow
+	scroll buttons
+make it browser comaptible. chromium works ok, firefor and safari needs testin
+
+fix scrollbars
+fix the scrollbars, looks stupid
+in loading screen, add performnt images load and spritesheets and stacks
+make LOADINGSCREEN_IMG_INCREMENT a global var for loadingscren
 when going to custom url, i need to go back and forth. not supported now
 make 3d auto gif maker houdini setup
 add support for multi stack ganimated grifs
