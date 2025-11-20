@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 import ast
-from PIL import Image, ImageDraw, ImageFont # Added Draw and Font
+from PIL import Image
 from natsort import natsorted
 
 # ==========================================
@@ -10,7 +10,7 @@ from natsort import natsorted
 
 DEFAULTS = {
     'SPRITESHEET_SIZE': 1024 * 4,
-    'SPRITE_SIZE': 256,
+    'SPRITE_SIZE': 64,
     'SPRITE_PADDING': 0,
     'RESIZE_METHOD': Image.LANCZOS,
     'SPRITESHEET_FORMAT': 'webp',
@@ -34,20 +34,16 @@ DEFAULTS = {
     'CUSTOM_PALETTE': ['#000000', '#FF0000', '#00FF00'],
 
     'MAX_GIF_FRAMES': 30,
-    'GIF_SPEED': 0.5, 
+    'GIF_SPEED': 0.5, # 0.0 (Slow) to 1.0 (Fast)
     
     # Viewer Config
     'STACK_SPACING': 0.15,
-    'STACK_DIM_OPACITY': 0.1, 
     'SEED': 293,
     'QUICKLOAD_THRESHOLD': 100,
     'ORDERED_GRID_LAYOUT': True,
     'ROTATION_SPEED': 0.000015,
     'RANDOM_TEXTDIV_POSITION': False,
-    'LOADINGSCREEN_IMG_INCREMENT': 50,
-
-    # NEW: Sandwich Config
-    'IMAGE_FOLDERNAME': True
+    'LOADINGSCREEN_IMG_INCREMENT': 50
 }
 
 # ==========================================
@@ -55,8 +51,10 @@ DEFAULTS = {
 # ==========================================
 
 def parse_custom_processing(path, current_config):
+    """Parses .custom_processing file and updates config dict"""
     new_config = current_config.copy()
     
+    # Check for Resolution override
     sprite_size_file = path / '.sprite_size'
     if sprite_size_file.exists():
         try:
@@ -65,10 +63,12 @@ def parse_custom_processing(path, current_config):
         except:
             print(f"Warning: Invalid .sprite_size in {path}")
 
+    # Check for Processing override
     custom_file = path / '.custom_processing'
     if custom_file.exists():
         try:
             content = custom_file.read_text()
+            # Safe-ish parsing of python-like variable assignments
             for line in content.splitlines():
                 line = line.strip()
                 if not line or line.startswith('#'): continue
@@ -76,8 +76,10 @@ def parse_custom_processing(path, current_config):
                     key, value = [x.strip() for x in line.split('=', 1)]
                     if key in DEFAULTS:
                         try:
+                            # Use ast.literal_eval for safe type conversion (bool, list, int, float)
                             new_config[key] = ast.literal_eval(value)
                         except:
+                            # Fallback for strings that might not be quoted in the text file
                             new_config[key] = value
         except Exception as e:
             print(f"Warning: Error parsing .custom_processing in {path}: {e}")
@@ -87,36 +89,6 @@ def parse_custom_processing(path, current_config):
 # ==========================================
 # IMAGE PROCESSING FUNCTIONS
 # ==========================================
-
-def create_label_image(text, size=256):
-    # Create a transparent image
-    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    
-    # Try to load a font, fallback to default
-    try:
-        # Use a large font size relative to the image
-        font_size = int(size / 6) 
-        font = ImageFont.truetype("arial.ttf", font_size)
-    except IOError:
-        font = ImageFont.load_default()
-    
-    # Calculate text position to center it
-    # Note: getbbox is cleaner in newer Pillow versions, textsize is deprecated in 10.x
-    try:
-        left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
-        w = right - left
-        h = bottom - top
-    except AttributeError:
-        # Fallback for older Pillow versions
-        w, h = draw.textsize(text, font=font)
-
-    x = (size - w) / 2
-    y = (size - h) / 2
-    
-    # Draw white text
-    draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
-    return img
 
 def apply_filter(img, conf):
     if conf['SHARPEN']:
@@ -211,7 +183,7 @@ def resize_image(img, target_size):
 # FILE SCANNING
 # ==========================================
 
-def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'images', 'backup', 'geo']):
+def scan_folder(path, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'images', 'backup', 'geo']):
     if path.name in ignore:
         return None
     
@@ -222,8 +194,6 @@ def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git'
     no_accum = False
     stop_accum = False
     
-    is_hidden = parent_hidden or (path / '.hidden').exists()
-    
     if path.is_dir():
         grid_file = path / '.grid_layout'
         if grid_file.exists():
@@ -233,7 +203,7 @@ def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git'
         stop_accum = (path / '.stop_accum').exists()
             
         for item in natsorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name)):
-            if item.name in ignore or item.name.startswith('.'): 
+            if item.name in ignore or item.name.startswith('.'): # Skip dotfiles in list
                 continue
             if item.is_file():
                 if item.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif', '.webp']:
@@ -241,7 +211,7 @@ def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git'
                 elif item.suffix.lower() == '.html':
                     texts.append(str(item.relative_to('.')))
             elif item.is_dir():
-                child = scan_folder(item, parent_hidden=is_hidden, ignore=ignore)
+                child = scan_folder(item, ignore)
                 if child:
                     children.append(child)
         
@@ -262,13 +232,12 @@ def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git'
         'path': str(path.relative_to('.')),
         'type': content_type,
         'children': children,
-        'ai': all_images, 
+        'ai': all_images, # These are strings right now, will become objects
         'at': all_texts,
         'oi': images,
         'ot': texts,
         'na': no_accum,
-        'sa': stop_accum,
-        'hid': is_hidden
+        'sa': stop_accum
     }
     if grid_layout: result['grid_layout'] = grid_layout
     return result
@@ -279,37 +248,28 @@ root = scan_folder(Path('.'))
 # FLATTENING AND CONFIG ASSIGNMENT
 # ==========================================
 
-all_image_items = [] 
+all_image_items = [] # Will store tuples: (path, config)
 
 def collect_images_with_config(node, parent_config):
+    # Resolve config for this node (check for overrides)
     node_path = Path(node['path'])
     current_config = parse_custom_processing(node_path, parent_config)
     
-    # NEW: Inject Sandwich Images if enabled and there are images in this folder
-    # We check if node['oi'] has items, or if we just want to label empty folders too.
-    # Assuming we only sandwich if there is content or if it is an image folder.
-    if current_config.get('IMAGE_FOLDERNAME'):
-        # Construct paths that will naturally sort to start (!) and end (~)
-        # We use .virtual extension to trap it later
-        bottom_name = f"{node['path']}/!00_bottom.virtual"
-        top_name = f"{node['path']}/~zz_top.virtual"
-        
-        # Prepend bottom
-        node['oi'].insert(0, bottom_name)
-        # Append top
-        node['oi'].append(top_name)
-
+    # Store config with each *original* image in this node
     for img_path in node['oi']:
         all_image_items.append({
             'path': img_path,
             'conf': current_config
         })
         
+    # Recurse
     for child in node['children']:
         collect_images_with_config(child, current_config)
 
 collect_images_with_config(root, DEFAULTS)
 
+# Sort images by SPRITE_SIZE to group them for efficient packing
+# Secondary sort by path to keep order predictable
 all_image_items.sort(key=lambda x: (x['conf']['SPRITE_SIZE'], x['path']))
 
 # ==========================================
@@ -320,9 +280,9 @@ Path('spritesheets').mkdir(exist_ok=True)
 for file in Path('spritesheets').glob('*'):
     file.unlink()
 
-sprite_data = {} 
+sprite_data = {} # Map: path -> data
 sheet_idx = 0
-current_sheet_size = 0 
+current_sheet_size = 0 # To track if we need a new sheet for a different resolution
 sheet = None
 slot_idx = 0
 
@@ -333,6 +293,7 @@ for item in all_image_items:
     target_size = conf['SPRITE_SIZE']
     sheet_dim = conf['SPRITESHEET_SIZE']
     
+    # If resolution changes or sheet is full, save and start new
     sprites_per_row = sheet_dim // target_size
     sprites_per_sheet = sprites_per_row * sprites_per_row
     
@@ -345,17 +306,19 @@ for item in all_image_items:
         slot_idx = 0
         current_sheet_size = target_size
 
+    # Determine GIF Speed (0.0 = 500ms, 1.0 = 20ms)
+    # Linear interpolation
     speed_val = max(0.0, min(1.0, conf['GIF_SPEED']))
     gif_delay_ms = int(500 - (speed_val * 480))
 
     is_gif = img_path.lower().endswith('.gif')
-    is_virtual = img_path.endswith('.virtual')
     
     if is_gif:
         try:
             gif = Image.open(img_path)
             frame_count = min(gif.n_frames, conf['MAX_GIF_FRAMES']) 
             
+            # Ensure GIF fits in current sheet, else split
             if slot_idx + frame_count > sprites_per_sheet:
                 sheet.save(f'spritesheets/sprites_{sheet_idx}.{DEFAULTS["SPRITESHEET_FORMAT"]}')
                 sheet_idx += 1
@@ -383,7 +346,7 @@ for item in all_image_items:
                 'anim': True,
                 'w': target_size,
                 'h': target_size,
-                'sz': target_size,
+                'sz': target_size, # Used for UV calc
                 'gd': gif_delay_ms,
                 'path': img_path
             }
@@ -391,22 +354,9 @@ for item in all_image_items:
             print(f"Error processing GIF {img_path}: {e}")
     else:
         try:
-            if is_virtual:
-                # Extract folder name for the text
-                # Path format is "folder/!00_bottom.virtual"
-                parent_folder = Path(img_path).parent.name
-                label_text = f"{parent_folder}_bottom" if "bottom" in img_path else f"{parent_folder}_top"
-                # Force size to 256 as requested, then resize to target sprite size
-                img = create_label_image(label_text, 256)
-            else:
-                img = Image.open(img_path).convert('RGBA')
-            
+            img = Image.open(img_path).convert('RGBA')
             img = resize_image(img, target_size)
-            
-            # Only apply filters to real images, usually text layers shouldn't be blurred/dithered 
-            # unless desired. We'll apply for consistency but filters like sharpen might affect text.
-            if not is_virtual:
-                img = apply_filter(img, conf)       
+            img = apply_filter(img, conf)       
     
             col = slot_idx % sprites_per_row
             row = slot_idx // sprites_per_row
@@ -419,7 +369,7 @@ for item in all_image_items:
                 'idx': slot_idx,
                 'w': img.width,
                 'h': img.height,
-                'sz': target_size,
+                'sz': target_size, # Used for UV calc
                 'path': img_path
             }
             slot_idx += 1
@@ -429,16 +379,22 @@ for item in all_image_items:
 if sheet:
     sheet.save(f'spritesheets/sprites_{sheet_idx}.{DEFAULTS["SPRITESHEET_FORMAT"]}')
 
+# Remap the tree data to point to the sprite data objects
 def replace_images_in_tree(node):
-    # Note: The .virtual paths were added to node['oi'] in collect_images_with_config
-    # so they will be processed here if they exist in sprite_data.
+    # Filter out images that failed to process
     node['ai'] = [sprite_data[p] for p in node['ai'] if p in sprite_data]
     node['oi'] = [sprite_data[p] for p in node['oi'] if p in sprite_data]
+    
+    # We must assign global indices based on the filtered list for the viewer
+    # but since 'ai' is aggregated, we can just assign a temporary index if needed.
+    # Actually, let's just rely on list order.
+    
     for child in node['children']:
         replace_images_in_tree(child)
 
 replace_images_in_tree(root)
 
+# Add global index (gi) after filtering
 all_valid_sprites = []
 def collect_valid(node):
     all_valid_sprites.extend(node['oi'])
@@ -450,9 +406,9 @@ for i, s in enumerate(all_valid_sprites):
 
 sprite_config = {
     'spritesheet_size': DEFAULTS['SPRITESHEET_SIZE'],
+    # 'sprite_size' is no longer global!
     'sprite_padding': DEFAULTS['SPRITE_PADDING'],
     'stack_spacing': DEFAULTS['STACK_SPACING'],
-    'stack_dim_opacity': DEFAULTS['STACK_DIM_OPACITY'],
     'seed': DEFAULTS['SEED'],
     'loadingscreen_img_increment': DEFAULTS['LOADINGSCREEN_IMG_INCREMENT'],
     'ordered_grid_layout': DEFAULTS['ORDERED_GRID_LAYOUT'],
@@ -672,28 +628,11 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
     link.className = 'tree-link';
     link.textContent = node.name;
     link.dataset.path = node.path;
-    
-    // NEW: Red dot for no accumulation
-    if (node.na) {{
-        const dot = document.createElement('span');
-        dot.style.cssText = 'width:6px;height:6px;background:red;border-radius:50%;display:inline-block;margin-left:5px;vertical-align:middle;';
-        dot.title = 'No Accumulation';
-        link.appendChild(dot);
-    }}
-    
-    if (node.hid) {{
-        link.style.textDecoration = 'line-through';
-        link.style.color = '#666';
-        link.style.cursor = 'not-allowed';
-        link.title = 'Hidden';
-    }} else {{
-        link.onclick = (e) => {{
-            e.stopPropagation();
-            renderContent(node);
-            updateTreeColors();
-        }};
-    }}
-    
+    link.onclick = (e) => {{
+        e.stopPropagation();
+        renderContent(node);
+        updateTreeColors();
+    }};
     item.appendChild(link);
     container.appendChild(item);
     const newPrefix = prefix + (isLast ? '    ' : '│   ');
@@ -709,28 +648,21 @@ function getDepthColor(depth) {{
 
 function updateTreeColors() {{
     if (!currentNode) return;
-    document.querySelectorAll('.tree-link').forEach(link => {{
-        if (link.style.textDecoration === 'line-through') {{
-            link.style.color = '#666';
-        }} else {{
-            link.style.color = '#4af';
-        }}
-    }});
-    
+    document.querySelectorAll('.tree-link').forEach(link => link.style.color = '#4af');
     const currentLink = document.querySelector(`.tree-link[data-path="${{currentNode.path}}"]`);
-    if (currentLink && !currentNode.hid) currentLink.style.color = '#44f';
+    if (currentLink) currentLink.style.color = '#44f';
     
     const pathParts = currentNode.path.split('/');
     for (let i = 1; i < pathParts.length; i++) {{
         const ancestorPath = pathParts.slice(0, i).join('/');
         const ancestorLink = document.querySelector(`.tree-link[data-path="${{ancestorPath}}"]`);
-        if (ancestorLink && ancestorLink.style.textDecoration !== 'line-through') ancestorLink.style.color = '#f44';
+        if (ancestorLink) ancestorLink.style.color = '#f44';
     }}
 
     function colorDescendants(node, depth = 0) {{
         node.children.forEach(child => {{
             const childLink = document.querySelector(`.tree-link[data-path="${{child.path}}"]`);
-            if (childLink && !child.hid) childLink.style.color = getDepthColor(depth);
+            if (childLink) childLink.style.color = getDepthColor(depth);
             colorDescendants(child, depth + 1);
         }});
     }}
@@ -769,7 +701,6 @@ async function createThreeScene(container, images, node) {{
     const SPRITESHEET_SIZE = spriteConfig.spritesheet_size;
     const SPRITE_PADDING = spriteConfig.sprite_padding;
     const STACK_SPACING = spriteConfig.stack_spacing;
-    const STACK_DIM_OPACITY = spriteConfig.stack_dim_opacity;
     const SEED = spriteConfig.seed;
     const ORDERED_GRID_LAYOUT = spriteConfig.ordered_grid_layout;
     const ROTATION_SPEED = spriteConfig.rotation_speed;
@@ -794,6 +725,7 @@ async function createThreeScene(container, images, node) {{
     uniqueSS.forEach(ss => {{ if (textureCache[ss]) progress.ss++; }});
     updateLoader();
  
+    // Base Geometry
     const baseGeometry = new THREE.PlaneGeometry(1, 1);
     
     const spacing = 1.5;
@@ -807,10 +739,10 @@ async function createThreeScene(container, images, node) {{
         offsetX = (cols - 1) * spacing / 2;
         offsetZ = (rows - 1) * spacing / 2;
     }} else {{
+        // ... (Existing Auto-Layout Logic) ...
         gridGroups = [];
         const processedFolders = new Set();
         function collectGridChildren(n) {{
-            if (n.hid) return; 
             if (n.grid_layout && n.ai.length > 0) {{
                 const childFolders = folders.filter(f => f.startsWith(n.path + '/') || f === n.path);
                 const [gCols, gRows] = ORDERED_GRID_LAYOUT ? n.grid_layout.split('x').map(Number) : [1, 1];
@@ -882,6 +814,7 @@ async function createThreeScene(container, images, node) {{
         }}
     }}
 
+    // Calculate Bounds
     let minX = Infinity, maxX = -Infinity;
     let minZ = Infinity, maxZ = -Infinity;
     const calculateBounds = (x, z) => {{
@@ -955,8 +888,9 @@ async function createThreeScene(container, images, node) {{
     renderer.setClearColor(0x000000);
     container.appendChild(renderer.domElement);
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enablePan = false;
+    //controls.enablePan = false;
 
+    // Buttons
     const navButtons = document.createElement('div');
     navButtons.style.cssText = 'position:absolute;top:5px;right:5px;display:flex;gap:5px;z-index:100';
     const createButton = () => {{
@@ -1035,7 +969,7 @@ async function createThreeScene(container, images, node) {{
                 if (folder.startsWith(parentFolder + '/') || folder === parentFolder) {{
                     data.material.opacity = 1.0;
                 }} else {{
-                    data.material.opacity = STACK_DIM_OPACITY;
+                    data.material.opacity = 0.5;
                 }}
             }}
             currentFocusedParent = parentFolder;
@@ -1083,6 +1017,7 @@ async function createThreeScene(container, images, node) {{
                 const scale = new THREE.Vector3(width, height, 1);
                 matrix.compose(position, quaternion, scale);
                 
+                // Calculate UVs based on the IMAGE SPECIFIC sprite size
                 const currentSpriteSize = imgData.sz; 
                 const SPRITES_PER_ROW = Math.floor(SPRITESHEET_SIZE / currentSpriteSize);
 
@@ -1156,6 +1091,7 @@ async function createThreeScene(container, images, node) {{
             progress.stacks++;
             if (progress.stacks % 5 === 0) await updateLoaderAsync();
 
+            // Label Logic
             const topY = (stackImages.length - 1) * STACK_SPACING;
             const worldPos = new THREE.Vector3(xPos, topY, zPos);
             const label = document.createElement('span');
@@ -1314,11 +1250,6 @@ async function renderContent(node) {{
     currentNode = node;
     updateTreeColors();
     
-    // NEW: Force reset all cached material opacities before rendering new scene
-    for (const key in stackMaterialCache) {{
-        if (stackMaterialCache[key]) stackMaterialCache[key].opacity = 1.0;
-    }}
-    
     activeScenes.forEach(disposeScene);
     activeScenes = [];
     const contentDiv = document.getElementById('content');
@@ -1330,7 +1261,7 @@ async function renderContent(node) {{
         if (child.sa || node.sa) return {{ ...child, at: [] }};
         return child;
     }});
-    children = children.filter(child => (child.ai.length > 0 || child.at.length > 0) && !child.hid);
+    children = children.filter(child => child.ai.length > 0 || child.at.length > 0);
     
     const count = children.length;
     const cols = Math.ceil(Math.sqrt(count));
@@ -1343,10 +1274,6 @@ async function renderContent(node) {{
 
         const label = document.createElement('div');
         label.className = 'div-label';
-        
-        // NEW: Add red dot if no accumulation
-        const redDot = child.na ? '<span style="color:red;font-size:1.5em;line-height:0;vertical-align:middle;padding-left:4px">.</span>' : '';
-        
         const pathParts = child.path.split('/');
         label.innerHTML = pathParts.map((part, idx) => {{
             const partPath = pathParts.slice(0, idx + 1).join('/');
@@ -1357,8 +1284,7 @@ async function renderContent(node) {{
                 else if (currentNode.children.some(c => c.path === partPath)) color = '#4f4';
             }}
             return `<span style="color:${{color}};cursor:pointer" data-path="${{partPath}}">${{part}}</span>`;
-        }}).join('/') + redDot;
-        
+        }}).join('/');
         label.style.pointerEvents = 'auto';
         label.querySelectorAll('span[data-path]').forEach(span => {{
             span.onclick = (e) => {{
@@ -1434,8 +1360,6 @@ async function renderContent(node) {{
             let htmlContent = '';
             for (const path of child.at) {{ htmlContent += await loadText(path); }}
             
-            const redDot = child.na ? '<span style="color:red;font-size:1.5em;line-height:0;vertical-align:middle;padding-left:4px">.</span>' : '';
-            
             const pathParts = child.path.split('/');
             const labelHtml = pathParts.map((part, idx) => {{
                 const partPath = pathParts.slice(0, idx + 1).join('/');
@@ -1446,7 +1370,7 @@ async function renderContent(node) {{
                     else if (currentNode.children.some(c => c.path === partPath)) color = '#4f4';
                 }}
                 return `<span style="color:${{color}};cursor:pointer" data-path="${{partPath}}">${{part}}</span>`;
-            }}).join('/') + redDot;
+            }}).join('/');
             
             const navHtml = `<div style="position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;background:black;padding:2px 5px;border:1px solid white"><span style="cursor:pointer;padding:0 5px;user-select:none;color:#4af" class="text-nav-left">&#60;</span><span style="padding:0 2px">texts</span><span style="cursor:pointer;padding:0 5px;user-select:none;color:#4af" class="text-nav-right">&#62;</span></div>`;
             div.innerHTML = htmlContent + '<style>.div-label {{ position: absolute; top: 5px; left: 5px; background: black; padding: 2px 5px; border: 1px solid white; z-index: 100; pointer-events: auto; }}</style><div class="div-label">' + labelHtml + '</div>' + navHtml;

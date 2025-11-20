@@ -201,11 +201,28 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {
     link.className = 'tree-link';
     link.textContent = node.name;
     link.dataset.path = node.path;
-    link.onclick = (e) => {
-        e.stopPropagation();
-        renderContent(node);
-        updateTreeColors();
-    };
+    
+    // NEW: Red dot for no accumulation
+    if (node.na) {
+        const dot = document.createElement('span');
+        dot.style.cssText = 'width:6px;height:6px;background:red;border-radius:50%;display:inline-block;margin-left:5px;vertical-align:middle;';
+        dot.title = 'No Accumulation';
+        link.appendChild(dot);
+    }
+    
+    if (node.hid) {
+        link.style.textDecoration = 'line-through';
+        link.style.color = '#666';
+        link.style.cursor = 'not-allowed';
+        link.title = 'Hidden';
+    } else {
+        link.onclick = (e) => {
+            e.stopPropagation();
+            renderContent(node);
+            updateTreeColors();
+        };
+    }
+    
     item.appendChild(link);
     container.appendChild(item);
     const newPrefix = prefix + (isLast ? '    ' : '│   ');
@@ -221,21 +238,28 @@ function getDepthColor(depth) {
 
 function updateTreeColors() {
     if (!currentNode) return;
-    document.querySelectorAll('.tree-link').forEach(link => link.style.color = '#4af');
+    document.querySelectorAll('.tree-link').forEach(link => {
+        if (link.style.textDecoration === 'line-through') {
+            link.style.color = '#666';
+        } else {
+            link.style.color = '#4af';
+        }
+    });
+    
     const currentLink = document.querySelector(`.tree-link[data-path="${currentNode.path}"]`);
-    if (currentLink) currentLink.style.color = '#44f';
+    if (currentLink && !currentNode.hid) currentLink.style.color = '#44f';
     
     const pathParts = currentNode.path.split('/');
     for (let i = 1; i < pathParts.length; i++) {
         const ancestorPath = pathParts.slice(0, i).join('/');
         const ancestorLink = document.querySelector(`.tree-link[data-path="${ancestorPath}"]`);
-        if (ancestorLink) ancestorLink.style.color = '#f44';
+        if (ancestorLink && ancestorLink.style.textDecoration !== 'line-through') ancestorLink.style.color = '#f44';
     }
 
     function colorDescendants(node, depth = 0) {
         node.children.forEach(child => {
             const childLink = document.querySelector(`.tree-link[data-path="${child.path}"]`);
-            if (childLink) childLink.style.color = getDepthColor(depth);
+            if (childLink && !child.hid) childLink.style.color = getDepthColor(depth);
             colorDescendants(child, depth + 1);
         });
     }
@@ -274,6 +298,7 @@ async function createThreeScene(container, images, node) {
     const SPRITESHEET_SIZE = spriteConfig.spritesheet_size;
     const SPRITE_PADDING = spriteConfig.sprite_padding;
     const STACK_SPACING = spriteConfig.stack_spacing;
+    const STACK_DIM_OPACITY = spriteConfig.stack_dim_opacity;
     const SEED = spriteConfig.seed;
     const ORDERED_GRID_LAYOUT = spriteConfig.ordered_grid_layout;
     const ROTATION_SPEED = spriteConfig.rotation_speed;
@@ -298,7 +323,6 @@ async function createThreeScene(container, images, node) {
     uniqueSS.forEach(ss => { if (textureCache[ss]) progress.ss++; });
     updateLoader();
  
-    // Base Geometry
     const baseGeometry = new THREE.PlaneGeometry(1, 1);
     
     const spacing = 1.5;
@@ -312,10 +336,10 @@ async function createThreeScene(container, images, node) {
         offsetX = (cols - 1) * spacing / 2;
         offsetZ = (rows - 1) * spacing / 2;
     } else {
-        // ... (Existing Auto-Layout Logic) ...
         gridGroups = [];
         const processedFolders = new Set();
         function collectGridChildren(n) {
+            if (n.hid) return; 
             if (n.grid_layout && n.ai.length > 0) {
                 const childFolders = folders.filter(f => f.startsWith(n.path + '/') || f === n.path);
                 const [gCols, gRows] = ORDERED_GRID_LAYOUT ? n.grid_layout.split('x').map(Number) : [1, 1];
@@ -387,7 +411,6 @@ async function createThreeScene(container, images, node) {
         }
     }
 
-    // Calculate Bounds
     let minX = Infinity, maxX = -Infinity;
     let minZ = Infinity, maxZ = -Infinity;
     const calculateBounds = (x, z) => {
@@ -461,9 +484,8 @@ async function createThreeScene(container, images, node) {
     renderer.setClearColor(0x000000);
     container.appendChild(renderer.domElement);
     const controls = new OrbitControls(camera, renderer.domElement);
-    //controls.enablePan = false;
+    controls.enablePan = false;
 
-    // Buttons
     const navButtons = document.createElement('div');
     navButtons.style.cssText = 'position:absolute;top:5px;right:5px;display:flex;gap:5px;z-index:100';
     const createButton = () => {
@@ -542,7 +564,7 @@ async function createThreeScene(container, images, node) {
                 if (folder.startsWith(parentFolder + '/') || folder === parentFolder) {
                     data.material.opacity = 1.0;
                 } else {
-                    data.material.opacity = 0.5;
+                    data.material.opacity = STACK_DIM_OPACITY;
                 }
             }
             currentFocusedParent = parentFolder;
@@ -590,7 +612,6 @@ async function createThreeScene(container, images, node) {
                 const scale = new THREE.Vector3(width, height, 1);
                 matrix.compose(position, quaternion, scale);
                 
-                // Calculate UVs based on the IMAGE SPECIFIC sprite size
                 const currentSpriteSize = imgData.sz; 
                 const SPRITES_PER_ROW = Math.floor(SPRITESHEET_SIZE / currentSpriteSize);
 
@@ -664,7 +685,6 @@ async function createThreeScene(container, images, node) {
             progress.stacks++;
             if (progress.stacks % 5 === 0) await updateLoaderAsync();
 
-            // Label Logic
             const topY = (stackImages.length - 1) * STACK_SPACING;
             const worldPos = new THREE.Vector3(xPos, topY, zPos);
             const label = document.createElement('span');
@@ -823,6 +843,11 @@ async function renderContent(node) {
     currentNode = node;
     updateTreeColors();
     
+    // NEW: Force reset all cached material opacities before rendering new scene
+    for (const key in stackMaterialCache) {
+        if (stackMaterialCache[key]) stackMaterialCache[key].opacity = 1.0;
+    }
+    
     activeScenes.forEach(disposeScene);
     activeScenes = [];
     const contentDiv = document.getElementById('content');
@@ -834,7 +859,7 @@ async function renderContent(node) {
         if (child.sa || node.sa) return { ...child, at: [] };
         return child;
     });
-    children = children.filter(child => child.ai.length > 0 || child.at.length > 0);
+    children = children.filter(child => (child.ai.length > 0 || child.at.length > 0) && !child.hid);
     
     const count = children.length;
     const cols = Math.ceil(Math.sqrt(count));
@@ -847,6 +872,10 @@ async function renderContent(node) {
 
         const label = document.createElement('div');
         label.className = 'div-label';
+        
+        // NEW: Add red dot if no accumulation
+        const redDot = child.na ? '<span style="color:red;font-size:1.5em;line-height:0;vertical-align:middle;padding-left:4px">.</span>' : '';
+        
         const pathParts = child.path.split('/');
         label.innerHTML = pathParts.map((part, idx) => {
             const partPath = pathParts.slice(0, idx + 1).join('/');
@@ -857,7 +886,8 @@ async function renderContent(node) {
                 else if (currentNode.children.some(c => c.path === partPath)) color = '#4f4';
             }
             return `<span style="color:${color};cursor:pointer" data-path="${partPath}">${part}</span>`;
-        }).join('/');
+        }).join('/') + redDot;
+        
         label.style.pointerEvents = 'auto';
         label.querySelectorAll('span[data-path]').forEach(span => {
             span.onclick = (e) => {
@@ -933,6 +963,8 @@ async function renderContent(node) {
             let htmlContent = '';
             for (const path of child.at) { htmlContent += await loadText(path); }
             
+            const redDot = child.na ? '<span style="color:red;font-size:1.5em;line-height:0;vertical-align:middle;padding-left:4px">.</span>' : '';
+            
             const pathParts = child.path.split('/');
             const labelHtml = pathParts.map((part, idx) => {
                 const partPath = pathParts.slice(0, idx + 1).join('/');
@@ -943,7 +975,7 @@ async function renderContent(node) {
                     else if (currentNode.children.some(c => c.path === partPath)) color = '#4f4';
                 }
                 return `<span style="color:${color};cursor:pointer" data-path="${partPath}">${part}</span>`;
-            }).join('/');
+            }).join('/') + redDot;
             
             const navHtml = `<div style="position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;background:black;padding:2px 5px;border:1px solid white"><span style="cursor:pointer;padding:0 5px;user-select:none;color:#4af" class="text-nav-left">&#60;</span><span style="padding:0 2px">texts</span><span style="cursor:pointer;padding:0 5px;user-select:none;color:#4af" class="text-nav-right">&#62;</span></div>`;
             div.innerHTML = htmlContent + '<style>.div-label { position: absolute; top: 5px; left: 5px; background: black; padding: 2px 5px; border: 1px solid white; z-index: 100; pointer-events: auto; }</style><div class="div-label">' + labelHtml + '</div>' + navHtml;

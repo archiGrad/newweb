@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 import ast
-from PIL import Image, ImageDraw, ImageFont # Added Draw and Font
+from PIL import Image
 from natsort import natsorted
 
 # ==========================================
@@ -10,7 +10,7 @@ from natsort import natsorted
 
 DEFAULTS = {
     'SPRITESHEET_SIZE': 1024 * 4,
-    'SPRITE_SIZE': 256,
+    'SPRITE_SIZE': 64,
     'SPRITE_PADDING': 0,
     'RESIZE_METHOD': Image.LANCZOS,
     'SPRITESHEET_FORMAT': 'webp',
@@ -38,16 +38,13 @@ DEFAULTS = {
     
     # Viewer Config
     'STACK_SPACING': 0.15,
-    'STACK_DIM_OPACITY': 0.1, 
+    'STACK_DIM_OPACITY': 0.1, # NEW: Opacity for non-focused stacks
     'SEED': 293,
     'QUICKLOAD_THRESHOLD': 100,
     'ORDERED_GRID_LAYOUT': True,
     'ROTATION_SPEED': 0.000015,
     'RANDOM_TEXTDIV_POSITION': False,
-    'LOADINGSCREEN_IMG_INCREMENT': 50,
-
-    # NEW: Sandwich Config
-    'IMAGE_FOLDERNAME': True
+    'LOADINGSCREEN_IMG_INCREMENT': 50
 }
 
 # ==========================================
@@ -87,36 +84,6 @@ def parse_custom_processing(path, current_config):
 # ==========================================
 # IMAGE PROCESSING FUNCTIONS
 # ==========================================
-
-def create_label_image(text, size=256):
-    # Create a transparent image
-    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    
-    # Try to load a font, fallback to default
-    try:
-        # Use a large font size relative to the image
-        font_size = int(size / 6) 
-        font = ImageFont.truetype("arial.ttf", font_size)
-    except IOError:
-        font = ImageFont.load_default()
-    
-    # Calculate text position to center it
-    # Note: getbbox is cleaner in newer Pillow versions, textsize is deprecated in 10.x
-    try:
-        left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
-        w = right - left
-        h = bottom - top
-    except AttributeError:
-        # Fallback for older Pillow versions
-        w, h = draw.textsize(text, font=font)
-
-    x = (size - w) / 2
-    y = (size - h) / 2
-    
-    # Draw white text
-    draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
-    return img
 
 def apply_filter(img, conf):
     if conf['SHARPEN']:
@@ -285,20 +252,6 @@ def collect_images_with_config(node, parent_config):
     node_path = Path(node['path'])
     current_config = parse_custom_processing(node_path, parent_config)
     
-    # NEW: Inject Sandwich Images if enabled and there are images in this folder
-    # We check if node['oi'] has items, or if we just want to label empty folders too.
-    # Assuming we only sandwich if there is content or if it is an image folder.
-    if current_config.get('IMAGE_FOLDERNAME'):
-        # Construct paths that will naturally sort to start (!) and end (~)
-        # We use .virtual extension to trap it later
-        bottom_name = f"{node['path']}/!00_bottom.virtual"
-        top_name = f"{node['path']}/~zz_top.virtual"
-        
-        # Prepend bottom
-        node['oi'].insert(0, bottom_name)
-        # Append top
-        node['oi'].append(top_name)
-
     for img_path in node['oi']:
         all_image_items.append({
             'path': img_path,
@@ -349,7 +302,6 @@ for item in all_image_items:
     gif_delay_ms = int(500 - (speed_val * 480))
 
     is_gif = img_path.lower().endswith('.gif')
-    is_virtual = img_path.endswith('.virtual')
     
     if is_gif:
         try:
@@ -391,22 +343,9 @@ for item in all_image_items:
             print(f"Error processing GIF {img_path}: {e}")
     else:
         try:
-            if is_virtual:
-                # Extract folder name for the text
-                # Path format is "folder/!00_bottom.virtual"
-                parent_folder = Path(img_path).parent.name
-                label_text = f"{parent_folder}_bottom" if "bottom" in img_path else f"{parent_folder}_top"
-                # Force size to 256 as requested, then resize to target sprite size
-                img = create_label_image(label_text, 256)
-            else:
-                img = Image.open(img_path).convert('RGBA')
-            
+            img = Image.open(img_path).convert('RGBA')
             img = resize_image(img, target_size)
-            
-            # Only apply filters to real images, usually text layers shouldn't be blurred/dithered 
-            # unless desired. We'll apply for consistency but filters like sharpen might affect text.
-            if not is_virtual:
-                img = apply_filter(img, conf)       
+            img = apply_filter(img, conf)       
     
             col = slot_idx % sprites_per_row
             row = slot_idx // sprites_per_row
@@ -430,8 +369,6 @@ if sheet:
     sheet.save(f'spritesheets/sprites_{sheet_idx}.{DEFAULTS["SPRITESHEET_FORMAT"]}')
 
 def replace_images_in_tree(node):
-    # Note: The .virtual paths were added to node['oi'] in collect_images_with_config
-    # so they will be processed here if they exist in sprite_data.
     node['ai'] = [sprite_data[p] for p in node['ai'] if p in sprite_data]
     node['oi'] = [sprite_data[p] for p in node['oi'] if p in sprite_data]
     for child in node['children']:
@@ -670,16 +607,11 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
     item.innerHTML = prefix + connector;
     const link = document.createElement('span');
     link.className = 'tree-link';
-    link.textContent = node.name;
-    link.dataset.path = node.path;
     
-    // NEW: Red dot for no accumulation
-    if (node.na) {{
-        const dot = document.createElement('span');
-        dot.style.cssText = 'width:6px;height:6px;background:red;border-radius:50%;display:inline-block;margin-left:5px;vertical-align:middle;';
-        dot.title = 'No Accumulation';
-        link.appendChild(dot);
-    }}
+    // MODIFIED: Add red dot if node has no_accum
+    const naDot = node.na ? ' <span style="color:#f44;font-size:9px;vertical-align:middle;">●</span>' : '';
+    link.innerHTML = node.name + naDot;
+    link.dataset.path = node.path;
     
     if (node.hid) {{
         link.style.textDecoration = 'line-through';
@@ -1343,10 +1275,6 @@ async function renderContent(node) {{
 
         const label = document.createElement('div');
         label.className = 'div-label';
-        
-        // NEW: Add red dot if no accumulation
-        const redDot = child.na ? '<span style="color:red;font-size:1.5em;line-height:0;vertical-align:middle;padding-left:4px">.</span>' : '';
-        
         const pathParts = child.path.split('/');
         label.innerHTML = pathParts.map((part, idx) => {{
             const partPath = pathParts.slice(0, idx + 1).join('/');
@@ -1356,9 +1284,13 @@ async function renderContent(node) {{
                 else if (currentNode.path.startsWith(partPath + '/')) color = '#f44';
                 else if (currentNode.children.some(c => c.path === partPath)) color = '#4f4';
             }}
-            return `<span style="color:${{color}};cursor:pointer" data-path="${{partPath}}">${{part}}</span>`;
-        }}).join('/') + redDot;
-        
+            
+            // MODIFIED: Check for no_accum dot in label
+            const pNode = findNodeByPath(dataTree, partPath);
+            const dot = (pNode && pNode.na) ? '<span style="color:#f44;font-size:9px;vertical-align:middle;margin-left:1px;">●</span>' : '';
+            
+            return `<span style="color:${{color}};cursor:pointer" data-path="${{partPath}}">${{part}}${{dot}}</span>`;
+        }}).join('/');
         label.style.pointerEvents = 'auto';
         label.querySelectorAll('span[data-path]').forEach(span => {{
             span.onclick = (e) => {{
@@ -1434,8 +1366,6 @@ async function renderContent(node) {{
             let htmlContent = '';
             for (const path of child.at) {{ htmlContent += await loadText(path); }}
             
-            const redDot = child.na ? '<span style="color:red;font-size:1.5em;line-height:0;vertical-align:middle;padding-left:4px">.</span>' : '';
-            
             const pathParts = child.path.split('/');
             const labelHtml = pathParts.map((part, idx) => {{
                 const partPath = pathParts.slice(0, idx + 1).join('/');
@@ -1445,8 +1375,13 @@ async function renderContent(node) {{
                     else if (currentNode.path.startsWith(partPath + '/')) color = '#f44';
                     else if (currentNode.children.some(c => c.path === partPath)) color = '#4f4';
                 }}
-                return `<span style="color:${{color}};cursor:pointer" data-path="${{partPath}}">${{part}}</span>`;
-            }}).join('/') + redDot;
+                
+                // MODIFIED: Check for no_accum dot in text-only label
+                const pNode = findNodeByPath(dataTree, partPath);
+                const dot = (pNode && pNode.na) ? '<span style="color:#f44;font-size:9px;vertical-align:middle;margin-left:1px;">●</span>' : '';
+                
+                return `<span style="color:${{color}};cursor:pointer" data-path="${{partPath}}">${{part}}${{dot}}</span>`;
+            }}).join('/');
             
             const navHtml = `<div style="position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;background:black;padding:2px 5px;border:1px solid white"><span style="cursor:pointer;padding:0 5px;user-select:none;color:#4af" class="text-nav-left">&#60;</span><span style="padding:0 2px">texts</span><span style="cursor:pointer;padding:0 5px;user-select:none;color:#4af" class="text-nav-right">&#62;</span></div>`;
             div.innerHTML = htmlContent + '<style>.div-label {{ position: absolute; top: 5px; left: 5px; background: black; padding: 2px 5px; border: 1px solid white; z-index: 100; pointer-events: auto; }}</style><div class="div-label">' + labelHtml + '</div>' + navHtml;
