@@ -1,4 +1,3 @@
-
 from pathlib import Path
 import json
 import ast
@@ -11,7 +10,7 @@ from natsort import natsorted
 
 DEFAULTS = {
     'SPRITESHEET_SIZE': 1024 * 4,
-    'SPRITE_SIZE': 128,
+    'SPRITE_SIZE': 64,
     'SPRITE_PADDING': 0,
     'RESIZE_METHOD': Image.LANCZOS,
     'SPRITESHEET_FORMAT': 'webp',
@@ -25,7 +24,7 @@ DEFAULTS = {
     'GAUSSIAN_BLUR': False,
     'GAUSSIAN_BLUR_RADIUS': 2,
     
-    'COLOR_TO_TRANSPARENT': 'blue',
+    'COLOR_TO_TRANSPARENT': 'black',
     'COLOR_THRESHOLD': 30,
 
     'DITHERING': False,
@@ -36,16 +35,12 @@ DEFAULTS = {
 
     'MAX_GIF_FRAMES': 30,
     'GIF_SPEED': 0.5, 
-
-
-    # Folder Label Defaults (Renamed & Updated)
-    'IMAGE_SETTINGS_LABELS': True,       # Was IMAGE_FOLDERNAME
-    'IMAGE_SETTINGS_COLOR': 'white',     # Was IMAGE_FOLDERNAME_COLOR
-    'IMAGE_SETTINGS_FONTSIZE': 3,       # Was IMAGE_FOLDERNAME_FONTSIZE
-    'IMAGE_SETTINGS_CUSTOMTEXT': "",     # NEW: Custom text override
-    'TEXT_IMAGE_RESOLUTION': 512,        # NEW: Fixed resolution for text labels
-
-   
+    
+    # Folder Label Defaults
+    'IMAGE_FOLDERNAME': True,
+    'IMAGE_FOLDERNAME_COLOR': 'blue',
+    'IMAGE_FOLDERNAME_FONTSIZE': 3, # NEW: Controls font size independently
+    
     # Viewer Config
     'STACK_SPACING': 0.15,
     'STACK_DIM_OPACITY': 0.1, 
@@ -188,7 +183,7 @@ def resize_image(img, target_size):
 # FILE SCANNING
 # ==========================================
 
-def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git', 'fonts', 'spritesheets', 'images', 'backup', 'geo']):
+def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git', 'spritesheets', 'images', 'backup', 'geo']):
     if path.name in ignore:
         return None
     
@@ -256,119 +251,59 @@ root = scan_folder(Path('.'))
 # LABEL GENERATION
 # ==========================================
 
-
-
 def load_custom_font(size):
-    # 1. Check specifically for the requested font in ./fonts/
-    requested_font = Path('fonts/UbuntuMono-Regular.ttf')
-    if requested_font.exists():
-        try:
-            return ImageFont.truetype(str(requested_font), int(size))
-        except IOError:
-            print(f"Warning: Found {requested_font} but could not load it.")
-            
-    # 2. Fallback List
+    # List of common font files to try
     font_candidates = [
-        "UbuntuMono-Regular.ttf", 
-        "UbuntuMono-R.ttf",
-        "DejaVuSansMono.ttf", 
-        "FreeMono.ttf", 
-        "Consolas.ttf",
-        "arial.ttf"
+        "arial.ttf", "Arial.ttf", 
+        "seguiemj.ttf", # Windows Emoji
+        "segoeui.ttf",  # Windows UI
+        "DejaVuSans.ttf", "FreeSans.ttf", # Linux common
+        "Roboto-Regular.ttf"
     ]
     
     for font_name in font_candidates:
         try:
-            return ImageFont.truetype(font_name, int(size))
+            return ImageFont.truetype(font_name, size)
         except IOError:
             continue
             
-    # 3. Final Fallback
+    # Fallback for newer Pillow versions that support size in load_default
     try:
-        return ImageFont.load_default(size=int(size))
+        return ImageFont.load_default(size=size)
     except TypeError:
-        return ImageFont.load_default()
-
-def get_dotfile_content(path):
-    ignored_dotfiles = [
-        '.no_accum', '.stop_accum', '.hidden', 
-        '.DS_Store', '.git', '.gitignore', '__pycache__'
-    ]
-    
-    candidates = []
-    try:
-        for item in path.iterdir():
-            if item.is_file() and item.name.startswith('.') and item.name not in ignored_dotfiles:
-                candidates.append(item)
-    except Exception:
         pass
-    
-    if not candidates:
-        return None
         
-    target = sorted(candidates, key=lambda x: x.name)[0]
-    
+    # Final fallback to default bitmap font (ignores size)
+    print("Warning: Could not load custom font size, using default.")
+    return ImageFont.load_default()
+
+def create_label_image(text, color, output_path, img_size, font_size):
     try:
-        content = target.read_text(encoding='utf-8')
-        lines = [line.strip() for line in content.splitlines() if line.strip()]
-        
-        if not lines:
-            return None
-            
-        return {'name': target.name, 'lines': lines}
-    except Exception as e:
-        print(f"Error reading dotfile {target}: {e}")
-        return None
-
-
-
-def create_label_image(title, body_lines, color, output_path, img_resolution, font_size):
-    try:
-        # Use the passed resolution
-        img = Image.new('RGBA', (img_resolution, img_resolution), (0, 0, 0, 0))
+        # Create transparent square image at IMG SIZE (resolution)
+        img = Image.new('RGBA', (img_size, img_size), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         
-        # Use the scaled font size
-        font_title = load_custom_font(int(font_size * 1.5))
-        font_body = load_custom_font(int(font_size))
+        # Load font at FONT SIZE
+        font = load_custom_font(font_size)
         
-        def get_text_size(text, font):
-            try:
-                left, top, right, bottom = font.getbbox(text)
-                return right - left, bottom - top
-            except AttributeError:
-                return font.getsize(text)
-
-        # Layout Configuration
-        scale_factor = img_resolution / 64.0
-        padding_left = int(10 * scale_factor)
-        padding_top = int(10 * scale_factor)
+        # Calculate text size to center it
+        try:
+            left, top, right, bottom = font.getbbox(text)
+            text_w = right - left
+            text_h = bottom - top
+        except AttributeError:
+            text_w, text_h = font.getsize(text)
         
-        # --- CHANGED: Set spacing to minimum (0) ---
-        line_spacing = 0 
-        title_body_gap = int(2 * scale_factor) if (title and body_lines) else 0
-        # -------------------------------------------
+        x = (img_size - text_w) / 2
+        y = (img_size - text_h) / 2
         
-        current_y = padding_top
-        
-        if title:
-            draw.text((padding_left, current_y), title, fill=color, font=font_title)
-            title_w, title_h = get_text_size(title, font_title)
-            current_y += title_h + title_body_gap
-        
-        for line in body_lines:
-            draw.text((padding_left, current_y), line, fill=color, font=font_body)
-            line_w, line_h = get_text_size(line, font_body)
-            current_y += line_h + line_spacing
-            
+        # Draw text centered
+        draw.text((x, y), text, fill=color, font=font)
         img.save(output_path)
         return True
     except Exception as e:
         print(f"Error creating label {output_path}: {e}")
         return False
-
-
-
 
 def manage_folder_labels(node, parent_config):
     node_path = Path(node['path'])
@@ -381,73 +316,52 @@ def manage_folder_labels(node, parent_config):
     top_path = node_path / top_name
     bottom_path = node_path / bottom_name
     
+    # Identify "Real" images (exclude the labels we manage)
     real_images = []
     for img_str in node['oi']:
         p = Path(img_str)
         if p.name not in [top_name, bottom_name]:
             real_images.append(img_str)
     
+    # Sort real images naturally
     real_images = natsorted(real_images, key=lambda x: Path(x).name)
             
-    should_generate = current_config.get('IMAGE_SETTINGS_LABELS', False)
+    should_generate = current_config.get('IMAGE_FOLDERNAME', False)
     has_real_images = len(real_images) > 0
     
     new_oi_list = []
 
     if should_generate and has_real_images:
-        color = current_config.get('IMAGE_SETTINGS_COLOR', 'white')
+        color = current_config.get('IMAGE_FOLDERNAME_COLOR', 'white')
+        sprite_size = current_config.get('SPRITE_SIZE', 64)
+        font_size = current_config.get('IMAGE_FOLDERNAME_FONTSIZE', 16)
         
-        # Configs from user/dotfile
-        base_font_size = current_config.get('IMAGE_SETTINGS_FONTSIZE', 16)
-        custom_text = current_config.get('IMAGE_SETTINGS_CUSTOMTEXT', "")
-        
-        # FORCE High Resolution
-        text_resolution = DEFAULTS['TEXT_IMAGE_RESOLUTION']
-        
-        # SCALE Font Size
-        font_scale = text_resolution / 64.0
-        effective_font_size = int(base_font_size * font_scale)
-        
-        # -------------------------------------------------
-        # PRIORITY LOGIC
-        # -------------------------------------------------
-        if custom_text and custom_text.strip():
-            lines = custom_text.strip().splitlines()
-            top_title = ""
-            top_body = lines
-            bottom_title = ""
-            bottom_body = lines
-        else:
-            dotfile_data = get_dotfile_content(node_path)
-            if dotfile_data:
-                top_title = dotfile_data['name']
-                top_body = dotfile_data['lines']
-                bottom_title = dotfile_data['name']
-                bottom_body = dotfile_data['lines']
-            else:
-                top_title = folder_name
-                top_body = ["top"]
-                bottom_title = folder_name
-                bottom_body = ["bottom"]
-        
-        if create_label_image(bottom_title, bottom_body, color, bottom_path, text_resolution, effective_font_size):
+        # Generate Bottom Label (AA) and Add FIRST
+        if create_label_image(f"{folder_name} bottom", color, bottom_path, sprite_size, font_size):
             new_oi_list.append(str(bottom_path.relative_to('.')))
         
+        # Add Real Images in middle
         new_oi_list.extend(real_images)
         
-        if create_label_image(top_title, top_body, color, top_path, text_resolution, effective_font_size):
+        # Generate Top Label (ZZ) and Add LAST
+        if create_label_image(f"{folder_name} top", color, top_path, sprite_size, font_size):
             new_oi_list.append(str(top_path.relative_to('.')))
             
+        # Update node['oi'] with enforced order
         node['oi'] = new_oi_list
         
     else:
+        # Cleanup if disabled
         if top_path.exists():
-            try: top_path.unlink()
+            try:
+                top_path.unlink()
             except: pass
         if bottom_path.exists():
-            try: bottom_path.unlink()
+            try:
+                bottom_path.unlink()
             except: pass
             
+        # Just keep real images
         node['oi'] = real_images
 
     for child in node['children']:
@@ -455,12 +369,6 @@ def manage_folder_labels(node, parent_config):
 
 # Execute Label Generation
 manage_folder_labels(root, DEFAULTS)
-
-
-
-
-
-
 
 # ==========================================
 # FLATTENING AND CONFIG ASSIGNMENT
@@ -620,6 +528,13 @@ sprite_config = {
 
 with open('data.json', 'w') as f:
     json.dump({'tree': root, 'sprite_config': sprite_config}, f, indent=2)
+
+# ==========================================
+# HTML GENERATION
+# ==========================================
+
+
+
 
 
 # ==========================================
@@ -1312,75 +1227,31 @@ async function createThreeScene(container, images, node) {{
             const topY = (stackImages.length - 1) * STACK_SPACING;
             const worldPos = new THREE.Vector3(xPos, topY, zPos);
             const label = document.createElement('span');
-
-
             const currentPath = currentNode ? currentNode.path : '';
-            const currentFolderName = currentPath ? currentPath.split('/').pop() : 'root';
-            let navHtml = '';
-
-
-
+            const currentFolderName = currentPath ? currentPath.split('/').pop() : '';
             const relativePath = folderName.startsWith(currentPath) && currentPath ? folderName.slice(currentPath.length + 1) : folderName;
             const pathParts = relativePath.split('/').filter(p => p);
             const displayParts = currentPath ? ['..', currentFolderName, ...pathParts] : pathParts;
 
-           
-
-
-
-
-            // 1. Root (<<) - Go back all the way
-            // Only show if we are not already at root
-            if (currentPath) {{
-                 navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#f44;pointer-events:auto" data-path="">&lt;&lt;</span>/`;
-            }}
-
-            // 2. Parent (<) - Go back 1 level
-            if (currentPath) {{
-                const parentPath = currentPath.split('/').slice(0, -1).join('/');
-                navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#f44;pointer-events:auto" data-path="${{parentPath}}">&lt;</span>/`;
-            }}
-
-            // 3. Focus (Current Folder Name)
-            navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#44f;pointer-events:auto" data-path="${{currentPath}}">${{currentFolderName}}</span>`;
-
-            // 4. Intermediates (>) and Leaf (>>)
-            let relPath = '';
-            if (folderName.startsWith(currentPath + '/')) {{
-                relPath = folderName.slice(currentPath.length + 1);
-            }} else if (currentPath === '') {{
-                relPath = folderName;
-            }}
-
-            const relParts = relPath.split('/').filter(p => p);
-
-            if (relParts.length > 0) {{
-                navHtml += '/';
-                if (relParts.length === 1) {{
-                    // Case: Immediate Child -> Show only >>
-                    navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#4f4;pointer-events:auto" data-path="${{folderName}}">&gt;&gt;</span>`;
+            label.innerHTML = displayParts.map((part, idx) => {{
+                let color = '#4af';
+                let partPath = '';
+                if (part === '..') {{
+                    partPath = currentPath.split('/').slice(0, -1).join('/');
+                    color = '#f44';
+                }} else if (idx === 1 && currentPath) {{
+                    partPath = currentPath;
+                    color = '#44f';
                 }} else {{
-                    // Case: Deep Child -> Show > then >>
-                    const nextPart = relParts[0];
-                    const nextPath = currentPath ? currentPath + '/' + nextPart : nextPart;
-                    // > (Next Level)
-                    navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#4af;pointer-events:auto" data-path="${{nextPath}}">&gt;</span>/`;
-                    
-                    // >> (Lowest Child / Leaf)
-                    navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#4f4;pointer-events:auto" data-path="${{folderName}}">&gt;&gt;</span>`;
+                    partPath = currentPath ? currentPath + '/' + pathParts.slice(0, idx - 1).join('/') : pathParts.slice(0, idx).join('/');
+                    const relativeDepth = idx - 2;
+                    color = getDepthColor(relativeDepth);
                 }}
-            }}
+                const shouldHide = displayParts.length > 4 && idx > 2 && idx < displayParts.length - 1;
+                const displayText = shouldHide ? '.' : part;
+                return `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:${{color}};pointer-events:auto" data-path="${{partPath}}">${{displayText}}</span>`;
+            }}).join('/') + `<span style="background:black;padding:2px 4px;font-size:9px;margin-left:2px;pointer-events:auto">${{stackImages.length}}</span>`;
 
-            // 5. Image Count
-            navHtml += `<span style="background:black;padding:2px 4px;font-size:9px;margin-left:2px;pointer-events:auto">${{stackImages.length}}</span>`;
-            
-            label.innerHTML = navHtml;
-
-
-
-
-
- 
             label.style.cssText = 'position:absolute;pointer-events:none;cursor:pointer;color:white;font-family:monospace;font-size:11px;';
             label.addEventListener('wheel', (e) => {{ e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }}, {{ passive: false }});
             labelContainer.appendChild(label);

@@ -11,7 +11,7 @@ from natsort import natsorted
 
 DEFAULTS = {
     'SPRITESHEET_SIZE': 1024 * 4,
-    'SPRITE_SIZE': 128,
+    'SPRITE_SIZE': 64,
     'SPRITE_PADDING': 0,
     'RESIZE_METHOD': Image.LANCZOS,
     'SPRITESHEET_FORMAT': 'webp',
@@ -1312,75 +1312,31 @@ async function createThreeScene(container, images, node) {{
             const topY = (stackImages.length - 1) * STACK_SPACING;
             const worldPos = new THREE.Vector3(xPos, topY, zPos);
             const label = document.createElement('span');
-
-
             const currentPath = currentNode ? currentNode.path : '';
-            const currentFolderName = currentPath ? currentPath.split('/').pop() : 'root';
-            let navHtml = '';
-
-
-
+            const currentFolderName = currentPath ? currentPath.split('/').pop() : '';
             const relativePath = folderName.startsWith(currentPath) && currentPath ? folderName.slice(currentPath.length + 1) : folderName;
             const pathParts = relativePath.split('/').filter(p => p);
             const displayParts = currentPath ? ['..', currentFolderName, ...pathParts] : pathParts;
 
-           
-
-
-
-
-            // 1. Root (<<) - Go back all the way
-            // Only show if we are not already at root
-            if (currentPath) {{
-                 navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#f44;pointer-events:auto" data-path="">&lt;&lt;</span>/`;
-            }}
-
-            // 2. Parent (<) - Go back 1 level
-            if (currentPath) {{
-                const parentPath = currentPath.split('/').slice(0, -1).join('/');
-                navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#f44;pointer-events:auto" data-path="${{parentPath}}">&lt;</span>/`;
-            }}
-
-            // 3. Focus (Current Folder Name)
-            navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#44f;pointer-events:auto" data-path="${{currentPath}}">${{currentFolderName}}</span>`;
-
-            // 4. Intermediates (>) and Leaf (>>)
-            let relPath = '';
-            if (folderName.startsWith(currentPath + '/')) {{
-                relPath = folderName.slice(currentPath.length + 1);
-            }} else if (currentPath === '') {{
-                relPath = folderName;
-            }}
-
-            const relParts = relPath.split('/').filter(p => p);
-
-            if (relParts.length > 0) {{
-                navHtml += '/';
-                if (relParts.length === 1) {{
-                    // Case: Immediate Child -> Show only >>
-                    navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#4f4;pointer-events:auto" data-path="${{folderName}}">&gt;&gt;</span>`;
+            label.innerHTML = displayParts.map((part, idx) => {{
+                let color = '#4af';
+                let partPath = '';
+                if (part === '..') {{
+                    partPath = currentPath.split('/').slice(0, -1).join('/');
+                    color = '#f44';
+                }} else if (idx === 1 && currentPath) {{
+                    partPath = currentPath;
+                    color = '#44f';
                 }} else {{
-                    // Case: Deep Child -> Show > then >>
-                    const nextPart = relParts[0];
-                    const nextPath = currentPath ? currentPath + '/' + nextPart : nextPart;
-                    // > (Next Level)
-                    navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#4af;pointer-events:auto" data-path="${{nextPath}}">&gt;</span>/`;
-                    
-                    // >> (Lowest Child / Leaf)
-                    navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#4f4;pointer-events:auto" data-path="${{folderName}}">&gt;&gt;</span>`;
+                    partPath = currentPath ? currentPath + '/' + pathParts.slice(0, idx - 1).join('/') : pathParts.slice(0, idx).join('/');
+                    const relativeDepth = idx - 2;
+                    color = getDepthColor(relativeDepth);
                 }}
-            }}
+                const shouldHide = displayParts.length > 4 && idx > 2 && idx < displayParts.length - 1;
+                const displayText = shouldHide ? '.' : part;
+                return `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:${{color}};pointer-events:auto" data-path="${{partPath}}">${{displayText}}</span>`;
+            }}).join('/') + `<span style="background:black;padding:2px 4px;font-size:9px;margin-left:2px;pointer-events:auto">${{stackImages.length}}</span>`;
 
-            // 5. Image Count
-            navHtml += `<span style="background:black;padding:2px 4px;font-size:9px;margin-left:2px;pointer-events:auto">${{stackImages.length}}</span>`;
-            
-            label.innerHTML = navHtml;
-
-
-
-
-
- 
             label.style.cssText = 'position:absolute;pointer-events:none;cursor:pointer;color:white;font-family:monospace;font-size:11px;';
             label.addEventListener('wheel', (e) => {{ e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }}, {{ passive: false }});
             labelContainer.appendChild(label);
