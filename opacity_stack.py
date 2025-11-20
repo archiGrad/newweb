@@ -1108,7 +1108,7 @@ async function createThreeScene(container, images, node) {{
     renderer.setClearColor(0x000000);
     container.appendChild(renderer.domElement);
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enablePan = false;
+    controls.enablePan = true;
 
     const navButtons = document.createElement('div');
     navButtons.style.cssText = 'position:absolute;top:5px;right:5px;display:flex;gap:5px;z-index:100';
