@@ -1,3 +1,4 @@
+
 from pathlib import Path
 import json
 import ast
@@ -255,6 +256,8 @@ root = scan_folder(Path('.'))
 # LABEL GENERATION
 # ==========================================
 
+
+
 def load_custom_font(size):
     # 1. Check specifically for the requested font in ./fonts/
     requested_font = Path('fonts/UbuntuMono-Regular.ttf')
@@ -317,6 +320,8 @@ def get_dotfile_content(path):
         print(f"Error reading dotfile {target}: {e}")
         return None
 
+
+
 def create_label_image(title, body_lines, color, output_path, img_resolution, font_size):
     try:
         # Use the passed resolution
@@ -361,6 +366,9 @@ def create_label_image(title, body_lines, color, output_path, img_resolution, fo
     except Exception as e:
         print(f"Error creating label {output_path}: {e}")
         return False
+
+
+
 
 def manage_folder_labels(node, parent_config):
     node_path = Path(node['path'])
@@ -447,6 +455,11 @@ def manage_folder_labels(node, parent_config):
 
 # Execute Label Generation
 manage_folder_labels(root, DEFAULTS)
+
+
+
+
+
 
 
 # ==========================================
@@ -575,57 +588,22 @@ for item in all_image_items:
 if sheet:
     sheet.save(f'spritesheets/sprites_{sheet_idx}.{DEFAULTS["SPRITESHEET_FORMAT"]}')
 
-# ==========================================
-# TREE PROCESSING & SAVING (OPTIMIZED)
-# ==========================================
-
-# 1. Assign 'gi' (Global Index) to the original sprite objects 
-#    We do this BEFORE converting the tree to IDs, while we still have paths.
-global_index_counter = 0
-
-def assign_gi_and_filter(node):
-    global global_index_counter
-    # We filter and assign 'gi' at the same time
-    
-    # Process 'ai' (Active Images)
-    valid_ai = []
-    for path in node['ai']:
-        if path in sprite_data:
-            sprite_data[path]['gi'] = global_index_counter
-            global_index_counter += 1
-            valid_ai.append(path)
-    node['ai'] = valid_ai
-            
-    # Process 'oi' (Other Images)
-    valid_oi = []
-    for path in node['oi']:
-        if path in sprite_data:
-            sprite_data[path]['gi'] = global_index_counter
-            global_index_counter += 1
-            valid_oi.append(path)
-    node['oi'] = valid_oi
-
+def replace_images_in_tree(node):
+    node['ai'] = [sprite_data[p] for p in node['ai'] if p in sprite_data]
+    node['oi'] = [sprite_data[p] for p in node['oi'] if p in sprite_data]
     for child in node['children']:
-        assign_gi_and_filter(child)
+        replace_images_in_tree(child)
 
-assign_gi_and_filter(root)
+replace_images_in_tree(root)
 
-# 2. Create the flat "Database" of all sprite objects
-image_database_list = list(sprite_data.values())
-
-# 3. Create a lookup map: Image Path -> ID (Integer)
-path_to_id = { item['path']: i for i, item in enumerate(image_database_list) }
-
-# 4. Inject IDs into the tree instead of full objects (NORMALIZATION)
-def replace_images_with_ids(node):
-    # 'ai' and 'oi' will now store Integers (0, 1, 2) instead of full Objects
-    node['ai'] = [path_to_id[p] for p in node['ai'] if p in path_to_id]
-    node['oi'] = [path_to_id[p] for p in node['oi'] if p in path_to_id]
-    
+all_valid_sprites = []
+def collect_valid(node):
+    all_valid_sprites.extend(node['oi'])
     for child in node['children']:
-        replace_images_with_ids(child)
-
-replace_images_with_ids(root)
+        collect_valid(child)
+collect_valid(root)
+for i, s in enumerate(all_valid_sprites):
+    s['gi'] = i
 
 sprite_config = {
     'spritesheet_size': DEFAULTS['SPRITESHEET_SIZE'],
@@ -640,13 +618,9 @@ sprite_config = {
     'quickload_threshold': DEFAULTS['QUICKLOAD_THRESHOLD']
 }
 
-# 5. Save BOTH the tree (lightweight) and the database (heavy)
 with open('data.json', 'w') as f:
-    json.dump({
-        'tree': root, 
-        'database': image_database_list, 
-        'sprite_config': sprite_config
-    }, f, indent=None) # indent=None makes the file significantly smaller
+    json.dump({'tree': root, 'sprite_config': sprite_config}, f, indent=2)
+
 
 # ==========================================
 # HTML GENERATION
@@ -819,28 +793,11 @@ function getStackMaterial(texturePath, stackName) {{
     return stackMaterialCache[key];
 }}
 
-// --- UPDATED LOADING LOGIC (HYDRATION) ---
 fetch('data.json')
     .then(r => r.json())
     .then(async d => {{
-        const db = d.database; // Get the flat list of objects
         dataTree = d.tree;
         spriteConfig = d.sprite_config;
-
-        // HELPER: Recursively swap IDs (Integers) back to Objects
-        function hydrate(node) {{
-            // Map [1, 5, 9] -> [Object1, Object5, Object9]
-            if (node.ai) node.ai = node.ai.map(id => db[id]);
-            if (node.oi) node.oi = node.oi.map(id => db[id]);
-            
-            if (node.children) {{
-                node.children.forEach(hydrate);
-            }}
-        }}
-        
-        // Run the helper on the root before doing anything else
-        hydrate(dataTree);
-
         buildTree(dataTree, document.getElementById('tree'));
         
         progress = {{ss: 0, ssTotal: 0, stacks: 0, stacksTotal: 0, imgs: 0, imgsTotal: 0}};
@@ -857,7 +814,6 @@ fetch('data.json')
             if (node) await renderContent(node);
         }}
     }});
-// --- END UPDATED LOADING LOGIC ---
 
 window.addEventListener('hashchange', () => {{
     const hash = window.location.hash.slice(2);

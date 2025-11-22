@@ -164,11 +164,28 @@ function getStackMaterial(texturePath, stackName) {
     return stackMaterialCache[key];
 }
 
+// --- UPDATED LOADING LOGIC (HYDRATION) ---
 fetch('data.json')
     .then(r => r.json())
     .then(async d => {
+        const db = d.database; // Get the flat list of objects
         dataTree = d.tree;
         spriteConfig = d.sprite_config;
+
+        // HELPER: Recursively swap IDs (Integers) back to Objects
+        function hydrate(node) {
+            // Map [1, 5, 9] -> [Object1, Object5, Object9]
+            if (node.ai) node.ai = node.ai.map(id => db[id]);
+            if (node.oi) node.oi = node.oi.map(id => db[id]);
+            
+            if (node.children) {
+                node.children.forEach(hydrate);
+            }
+        }
+        
+        // Run the helper on the root before doing anything else
+        hydrate(dataTree);
+
         buildTree(dataTree, document.getElementById('tree'));
         
         progress = {ss: 0, ssTotal: 0, stacks: 0, stacksTotal: 0, imgs: 0, imgsTotal: 0};
@@ -185,6 +202,7 @@ fetch('data.json')
             if (node) await renderContent(node);
         }
     });
+// --- END UPDATED LOADING LOGIC ---
 
 window.addEventListener('hashchange', () => {
     const hash = window.location.hash.slice(2);
