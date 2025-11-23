@@ -192,11 +192,6 @@ def resize_image(img, target_size):
 # FILE SCANNING
 # ==========================================
 
-
-
-
-
-
 def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git', 'fonts', 'spritesheets', 'images', 'backup', 'geo']):
     if path.name in ignore:
         return None
@@ -208,23 +203,12 @@ def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git'
     no_accum = False
     stop_accum = False
     
-    # NEW: Variable for custom spacing
-    manual_spacing = None
-    
     is_hidden = parent_hidden or (path / '.hidden').exists()
     
     if path.is_dir():
         grid_file = path / '.grid_layout'
         if grid_file.exists():
             grid_layout = grid_file.read_text().strip()
-            
-        # NEW: Check for .stack_spacing file
-        spacing_file = path / '.stack_spacing'
-        if spacing_file.exists():
-            try:
-                manual_spacing = float(spacing_file.read_text().strip())
-            except Exception as e:
-                print(f"Warning: Invalid .stack_spacing in {path}: {e}")
         
         no_accum = (path / '.no_accum').exists()
         stop_accum = (path / '.stop_accum').exists()
@@ -265,12 +249,10 @@ def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git'
         'ot': texts,
         'na': no_accum,
         'sa': stop_accum,
-        'hid': is_hidden,
-        'msp': manual_spacing # NEW: Add Manual Spacing to the node data
+        'hid': is_hidden
     }
     if grid_layout: result['grid_layout'] = grid_layout
     return result
-
 
 root = scan_folder(Path('.'))
 
@@ -1201,14 +1183,9 @@ async function createThreeScene(container, images, node) {{
     navButtons.append(topBtn, rightBtn, bottomBtn, leftBtn);
     container.appendChild(navButtons);
 
-   
     let maxStackHeight = 0;
     folders.forEach(folder => {{
-        // Find the specific node for this folder to check for custom spacing
-        const folderNode = findNodeByPath(dataTree, folder);
-        const localSpacing = (folderNode && folderNode.msp != null) ? folderNode.msp : STACK_SPACING;
-        
-        maxStackHeight = Math.max(maxStackHeight, grouped[folder].length * localSpacing);
+        maxStackHeight = Math.max(maxStackHeight, grouped[folder].length * STACK_SPACING);
     }});
     const midHeight = maxStackHeight / 2;
 
@@ -1224,7 +1201,6 @@ async function createThreeScene(container, images, node) {{
     labelContainer.id = 'label-container';
     container.appendChild(labelContainer);
 
- 
     const toggleBtn = document.createElement('button');
     toggleBtn.style.cssText = 'position:absolute;bottom:5px;left:5px;background:#44f;border:none;width:8px;height:8px;border-radius:50%;cursor:pointer;padding:0;z-index:100';
     let labelsVisible = true;
@@ -1295,14 +1271,6 @@ async function createThreeScene(container, images, node) {{
         
         for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {{
             const folderName = folders[stackIdx];
-
-
-            // --- NEW: Retrieve Custom Spacing for this specific stack ---
-            const folderNode = findNodeByPath(dataTree, folderName);
-            const localSpacing = (folderNode && folderNode.msp != null) ? folderNode.msp : STACK_SPACING;
-            // ------------------------------------------------------------
-
-
             const stackImages = grouped[folderName];
             const pos = folderPositions[folderName];
             const xPos = pos.x;
@@ -1321,7 +1289,7 @@ async function createThreeScene(container, images, node) {{
                 const height = 1.5;
                 const width = height * aspect;
 
-                const y = i * localSpacing;
+                const y = i * STACK_SPACING;
                 const matrix = new THREE.Matrix4();
                 const position = new THREE.Vector3(xPos, y, zPos);
                 const rotation = new THREE.Euler(Math.PI / 2, Math.PI, Math.PI);
@@ -1683,51 +1651,26 @@ async function renderContent(node) {{
         if (child.ai.length > 0 && child.at.length > 0) {{
             div.style.display = 'flex';
             div.style.flexDirection = 'row';
-            
-            // 1. Create a Wrapper for Text + Nav (This stays fixed)
-            const textWrapper = document.createElement('div');
-            textWrapper.style.flex = '2';
-            textWrapper.style.position = 'relative'; // Anchor for the Nav
-            textWrapper.style.border = '1px solid white';
-            textWrapper.style.overflow = 'hidden';   // The wrapper does NOT scroll
-
-            // 2. Create the Scrollable Text Area
             const textDiv = document.createElement('div');
             textDiv.className = 'text-content';
-            textDiv.style.width = '100%';
-            textDiv.style.height = '100%';
-            textDiv.style.overflowY = 'auto'; // The text scrolls INSIDE here
-            textDiv.style.position = 'absolute'; // Fill the wrapper
-            textDiv.style.top = '0';
-            textDiv.style.left = '0';
-
+            textDiv.style.flex = '1';
+            textDiv.style.border = '1px solid white';
+            textDiv.style.position = 'relative';
+            textDiv.style.overflow = 'auto';
             let htmlContent = '';
             for (const path of child.at) {{
                 htmlContent += await loadText(path);
             }}
-            textDiv.innerHTML = htmlContent;
-
-            // 3. Create the Nav separately (Sibling to textDiv, child of Wrapper)
-            const navDiv = document.createElement('div');
             
             const hasParent = currentNode.path.split('/').length > 1;
             const firstChildWithText = currentNode.children?.find(c => c.at.length > 0);
             const leftColor = hasParent ? '#f44' : '#44f';
             const rightColor = firstChildWithText ? '#4f4' : '#44f';
+            
+            textDiv.innerHTML = htmlContent + `<div style="position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;background:black;padding:2px 5px;border:1px solid white;z-index:100"><span style="cursor:pointer;padding:0 5px;user-select:none;color:${{leftColor}}" class="text-nav-left">&#60;</span><span style="padding:0 2px">texts</span><span style="cursor:pointer;padding:0 5px;user-select:none;color:${{rightColor}}" class="text-nav-right">&#62;</span></div>`;
 
-            navDiv.innerHTML = `
-                <span style="cursor:pointer;padding:0 5px;user-select:none;color:${{leftColor}}" class="text-nav-left">&lt;</span>
-                <span style="cursor:pointer;padding:0 5px;user-select:none;color:${{rightColor}}" class="text-nav-right">&gt;</span>
-            `;
-            navDiv.style.cssText = 'position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;background:black;padding:2px 5px;border:1px solid white;z-index:100';
-
-            // 4. Assemble
-            textWrapper.appendChild(textDiv);
-            textWrapper.appendChild(navDiv);
-
-            // Re-attach listeners (query from navDiv directly)
-            const navLeft = navDiv.querySelector('.text-nav-left');
-            const navRight = navDiv.querySelector('.text-nav-right');
+            const navLeft = textDiv.querySelector('.text-nav-left');
+            const navRight = textDiv.querySelector('.text-nav-right');
             
             navLeft.onclick = () => {{
                 if (currentNode && currentNode.path) {{
@@ -1736,16 +1679,16 @@ async function renderContent(node) {{
                     if (parentNode && parentNode.at.length > 0) renderContent(parentNode);
                 }}
             }};
+            
             navRight.onclick = () => {{
                 if (currentNode && currentNode.children && currentNode.children.length > 0) {{
                     const firstChildWithText = currentNode.children.find(c => c.at.length > 0);
                     if (firstChildWithText) renderContent(firstChildWithText);
                 }}
             }};
-
-            // 5. Image Side
+            
             const imgDiv = document.createElement('div');
-            imgDiv.style.flex = '3';
+            imgDiv.style.flex = '1';
             imgDiv.style.position = 'relative';
             imgDiv.style.border = '1px solid white';
             imgDiv.style.overflow = 'hidden';
@@ -1753,16 +1696,13 @@ async function renderContent(node) {{
             if (RANDOM_TEXTDIV_POSITION) {{
                 const seed = child.path.split('').reduce((a, c) => a + c.charCodeAt(0), 0) * SEED;
                 const rand = seededRandom(seed);
-                if (rand < 0.5) {{ div.appendChild(textWrapper); div.appendChild(imgDiv); }}
-                else {{ div.appendChild(imgDiv); div.appendChild(textWrapper); }}
+                if (rand < 0.5) {{ div.appendChild(textDiv); div.appendChild(imgDiv); }}
+                else {{ div.appendChild(imgDiv); div.appendChild(textDiv); }}
             }} else {{
-                 div.appendChild(textWrapper); div.appendChild(imgDiv);
-            }}
-            
+                div.appendChild(textDiv); div.appendChild(imgDiv);
+            }} 
             div._sceneContainer = imgDiv;
             div._sceneChild = child;
-
-
         }} else if (child.ai.length > 0) {{
             div._sceneContainer = div;
             div._sceneChild = child;

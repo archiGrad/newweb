@@ -53,12 +53,7 @@ DEFAULTS = {
     'ORDERED_GRID_LAYOUT': True,
     'ROTATION_SPEED': 0.000015,
     'RANDOM_TEXTDIV_POSITION': False,
-    'LOADINGSCREEN_IMG_INCREMENT': 50,
-
-    #stack labels/annotations 
-    'MAX_LABELS': 100,
-    'SCREEN_BUFFER': 100
-
+    'LOADINGSCREEN_IMG_INCREMENT': 50
 }
 
 # ==========================================
@@ -192,11 +187,6 @@ def resize_image(img, target_size):
 # FILE SCANNING
 # ==========================================
 
-
-
-
-
-
 def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git', 'fonts', 'spritesheets', 'images', 'backup', 'geo']):
     if path.name in ignore:
         return None
@@ -208,23 +198,12 @@ def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git'
     no_accum = False
     stop_accum = False
     
-    # NEW: Variable for custom spacing
-    manual_spacing = None
-    
     is_hidden = parent_hidden or (path / '.hidden').exists()
     
     if path.is_dir():
         grid_file = path / '.grid_layout'
         if grid_file.exists():
             grid_layout = grid_file.read_text().strip()
-            
-        # NEW: Check for .stack_spacing file
-        spacing_file = path / '.stack_spacing'
-        if spacing_file.exists():
-            try:
-                manual_spacing = float(spacing_file.read_text().strip())
-            except Exception as e:
-                print(f"Warning: Invalid .stack_spacing in {path}: {e}")
         
         no_accum = (path / '.no_accum').exists()
         stop_accum = (path / '.stop_accum').exists()
@@ -265,12 +244,10 @@ def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git'
         'ot': texts,
         'na': no_accum,
         'sa': stop_accum,
-        'hid': is_hidden,
-        'msp': manual_spacing # NEW: Add Manual Spacing to the node data
+        'hid': is_hidden
     }
     if grid_layout: result['grid_layout'] = grid_layout
     return result
-
 
 root = scan_folder(Path('.'))
 
@@ -660,9 +637,7 @@ sprite_config = {
     'ordered_grid_layout': DEFAULTS['ORDERED_GRID_LAYOUT'],
     'rotation_speed': DEFAULTS['ROTATION_SPEED'],
     'random_textdiv_position': DEFAULTS['RANDOM_TEXTDIV_POSITION'],
-    'quickload_threshold': DEFAULTS['QUICKLOAD_THRESHOLD'],
-    'max_labels': DEFAULTS['MAX_LABELS'],
-    'screen_buffer': DEFAULTS['SCREEN_BUFFER']
+    'quickload_threshold': DEFAULTS['QUICKLOAD_THRESHOLD']
 }
 
 # 5. Save BOTH the tree (lightweight) and the database (heavy)
@@ -676,7 +651,6 @@ with open('data.json', 'w') as f:
 # ==========================================
 # HTML GENERATION
 # ==========================================
-
 
 with open('index.html', 'w') as f:
     f.write(f'''<!DOCTYPE html>
@@ -733,31 +707,6 @@ body {{
     padding: 20px;
     overflow-y: auto;
     white-space: pre-wrap;
-}}
-/* OPTIMIZATION: Hardware accelerated layer for labels */
-#label-container {{
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    overflow: hidden;
-}}
-.stack-label {{
-    position: absolute;
-    top: 0;
-    left: 0;
-    will-change: transform; /* Hint to browser to use GPU */
-    pointer-events: none;
-    cursor: pointer;
-    color: white;
-    font-family: monospace;
-    font-size: 11px;
-    user-select: none;
-}}
-.stack-label span {{
-    pointer-events: auto; /* Re-enable clicks on the text spans */
 }}
 canvas {{ display: block; width: 100%; height: 100%; }}
 </style>
@@ -821,8 +770,9 @@ async function updateLoaderAsync() {{
 let dataTree;
 let spriteConfig;
 let activeScenes = [];
-const textureCache = {{}};
+const spritesheets = {{}};
 const pendingLoads = {{}};
+const textureCache = {{}};
 const stackMaterialCache = {{}};
 
 function seededRandom(seed) {{
@@ -869,22 +819,32 @@ function getStackMaterial(texturePath, stackName) {{
     return stackMaterialCache[key];
 }}
 
+// --- UPDATED LOADING LOGIC (HYDRATION) ---
 fetch('data.json')
     .then(r => r.json())
     .then(async d => {{
-        const db = d.database;
+        const db = d.database; // Get the flat list of objects
         dataTree = d.tree;
         spriteConfig = d.sprite_config;
 
+        // HELPER: Recursively swap IDs (Integers) back to Objects
         function hydrate(node) {{
+            // Map [1, 5, 9] -> [Object1, Object5, Object9]
             if (node.ai) node.ai = node.ai.map(id => db[id]);
             if (node.oi) node.oi = node.oi.map(id => db[id]);
-            if (node.children) node.children.forEach(hydrate);
+            
+            if (node.children) {{
+                node.children.forEach(hydrate);
+            }}
         }}
+        
+        // Run the helper on the root before doing anything else
         hydrate(dataTree);
 
         buildTree(dataTree, document.getElementById('tree'));
+        
         progress = {{ss: 0, ssTotal: 0, stacks: 0, stacksTotal: 0, imgs: 0, imgsTotal: 0}};
+        
         await renderContent(dataTree);
         
         isInitialLoad = false;
@@ -897,6 +857,7 @@ fetch('data.json')
             if (node) await renderContent(node);
         }}
     }});
+// --- END UPDATED LOADING LOGIC ---
 
 window.addEventListener('hashchange', () => {{
     const hash = window.location.hash.slice(2);
@@ -912,6 +873,7 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
     const link = document.createElement('span');
     link.className = 'tree-link';
     
+    // MODIFIED: Add red dot if node has no_accum
     const naDot = node.na ? ' <span style="color:#f44;font-size:9px;vertical-align:middle;">●</span>' : '';
     link.innerHTML = node.name + naDot;
     link.dataset.path = node.path;
@@ -1008,6 +970,7 @@ async function createThreeScene(container, images, node) {{
     const SEED = spriteConfig.seed;
     const ORDERED_GRID_LAYOUT = spriteConfig.ordered_grid_layout;
     const ROTATION_SPEED = spriteConfig.rotation_speed;
+    const LOADINGSCREEN_IMG_INCREMENT = spriteConfig.loadingscreen_img_increment;
 
     images.forEach(imgData => {{
         const parts = imgData.path.split('/');
@@ -1017,7 +980,9 @@ async function createThreeScene(container, images, node) {{
     }});
     
     const folders = Object.keys(grouped);
-    folders.forEach(folder => {{ grouped[folder].sort((a, b) => a.gi - b.gi); }});
+    folders.forEach(folder => {{
+        grouped[folder].sort((a, b) => a.gi - b.gi);
+    }});
    
     progress.imgsTotal += images.length;
     progress.stacksTotal += folders.length;
@@ -1201,14 +1166,9 @@ async function createThreeScene(container, images, node) {{
     navButtons.append(topBtn, rightBtn, bottomBtn, leftBtn);
     container.appendChild(navButtons);
 
-   
     let maxStackHeight = 0;
     folders.forEach(folder => {{
-        // Find the specific node for this folder to check for custom spacing
-        const folderNode = findNodeByPath(dataTree, folder);
-        const localSpacing = (folderNode && folderNode.msp != null) ? folderNode.msp : STACK_SPACING;
-        
-        maxStackHeight = Math.max(maxStackHeight, grouped[folder].length * localSpacing);
+        maxStackHeight = Math.max(maxStackHeight, grouped[folder].length * STACK_SPACING);
     }});
     const midHeight = maxStackHeight / 2;
 
@@ -1221,10 +1181,9 @@ async function createThreeScene(container, images, node) {{
     controls.target.set(0, midHeight, 0);
 
     const labelContainer = document.createElement('div');
-    labelContainer.id = 'label-container';
+    labelContainer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;';
     container.appendChild(labelContainer);
 
- 
     const toggleBtn = document.createElement('button');
     toggleBtn.style.cssText = 'position:absolute;bottom:5px;left:5px;background:#44f;border:none;width:8px;height:8px;border-radius:50%;cursor:pointer;padding:0;z-index:100';
     let labelsVisible = true;
@@ -1295,14 +1254,6 @@ async function createThreeScene(container, images, node) {{
         
         for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {{
             const folderName = folders[stackIdx];
-
-
-            // --- NEW: Retrieve Custom Spacing for this specific stack ---
-            const folderNode = findNodeByPath(dataTree, folderName);
-            const localSpacing = (folderNode && folderNode.msp != null) ? folderNode.msp : STACK_SPACING;
-            // ------------------------------------------------------------
-
-
             const stackImages = grouped[folderName];
             const pos = folderPositions[folderName];
             const xPos = pos.x;
@@ -1321,7 +1272,7 @@ async function createThreeScene(container, images, node) {{
                 const height = 1.5;
                 const width = height * aspect;
 
-                const y = i * localSpacing;
+                const y = i * STACK_SPACING;
                 const matrix = new THREE.Matrix4();
                 const position = new THREE.Vector3(xPos, y, zPos);
                 const rotation = new THREE.Euler(Math.PI / 2, Math.PI, Math.PI);
@@ -1411,11 +1362,19 @@ async function createThreeScene(container, images, node) {{
             const currentFolderName = currentPath ? currentPath.split('/').pop() : 'root';
             let navHtml = '';
 
+
+
             const relativePath = folderName.startsWith(currentPath) && currentPath ? folderName.slice(currentPath.length + 1) : folderName;
             const pathParts = relativePath.split('/').filter(p => p);
             const displayParts = currentPath ? ['..', currentFolderName, ...pathParts] : pathParts;
 
+           
+
+
+
+
             // 1. Root (<<) - Go back all the way
+            // Only show if we are not already at root
             if (currentPath) {{
                  navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#f44;pointer-events:auto" data-path="">&lt;&lt;</span>/`;
             }}
@@ -1460,8 +1419,13 @@ async function createThreeScene(container, images, node) {{
             navHtml += `<span style="background:black;padding:2px 4px;font-size:9px;margin-left:2px;pointer-events:auto">${{stackImages.length}}</span>`;
             
             label.innerHTML = navHtml;
-            label.className = 'stack-label';
-            
+
+
+
+
+
+ 
+            label.style.cssText = 'position:absolute;pointer-events:none;cursor:pointer;color:white;font-family:monospace;font-size:11px;';
             label.addEventListener('wheel', (e) => {{ e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }}, {{ passive: false }});
             labelContainer.appendChild(label);
             stackLabels.push({{ element: label, position: worldPos, xPos, zPos, folderName }});
@@ -1499,15 +1463,9 @@ async function createThreeScene(container, images, node) {{
 
     const frustum = new THREE.Frustum();
     const cameraViewProjectionMatrix = new THREE.Matrix4();
+    const raycaster = new THREE.Raycaster();
 
     let frameCount = 0;
-    
-    // OPTIMIZATION SETTINGS
-
-
-    const MAX_LABELS =  spriteConfig.max_labels;
-    const SCREEN_BUFFER = spriteConfig.screen_buffer;
-
     function animate() {{
         stats.begin();
         sceneData.animationId = requestAnimationFrame(animate);
@@ -1515,7 +1473,6 @@ async function createThreeScene(container, images, node) {{
         const rotationAngle = Date.now() * ROTATION_SPEED;
         scene.rotation.y = rotationAngle;
         
-        // Frustum culling for stacks (every 5 frames)
         if (frameCount % 5 === 0) {{
             camera.updateMatrixWorld();
             cameraViewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
@@ -1526,70 +1483,42 @@ async function createThreeScene(container, images, node) {{
             }}
         }}
         
-        // OPTIMIZED LABEL UPDATE (Every frame, but efficient)
-        if (labelsVisible) {{
-            const cWidth = container.clientWidth;
-            const cHeight = container.clientHeight;
-            const cCenterX = cWidth / 2;
-            const cCenterY = cHeight / 2;
+        if (frameCount % 10 === 0) {{
+            raycaster.camera = camera;
+            stackLabels.forEach(({{ element, position, xPos, zPos }}) => {{
+                if (!element.parentElement) return;
+                const rotatedX = xPos * Math.cos(rotationAngle) + zPos * Math.sin(rotationAngle);
+                const rotatedZ = -xPos * Math.sin(rotationAngle) + zPos * Math.cos(rotationAngle);
+                const rotatedPos = new THREE.Vector3(rotatedX, position.y + 0.01, rotatedZ);
+                const screenPos = rotatedPos.clone().project(camera);
+                
+                if (screenPos.z > 1) {{ element.style.display = 'none'; return; }}
 
-            const labelCandidates = [];
-
-            const cosR = Math.cos(rotationAngle);
-            const sinR = Math.sin(rotationAngle);
-
-            // 1. Calculate positions and filter roughly
-            for (let i = 0; i < stackLabels.length; i++) {{
-                const lbl = stackLabels[i];
+                const direction = new THREE.Vector3().subVectors(camera.position, rotatedPos).normalize();
+                raycaster.set(rotatedPos, direction);
+                const intersects = raycaster.intersectObjects(scene.children, true);
                 
-                // Manual World Rotation
-                const rX = lbl.xPos * cosR + lbl.zPos * sinR;
-                const rZ = -lbl.xPos * sinR + lbl.zPos * cosR;
-                
-                // Quick Depth Check (is it behind camera?)
-                // Simple heuristic since we know camera is roughly at +Z
-                // But camera rotates. So we use projection.
-                
-                const vec = new THREE.Vector3(rX, lbl.position.y, rZ);
-                vec.project(camera);
-                
-                // vec.x and vec.y are now -1 to 1
-                // Check bounds with buffer
-                if (vec.z < 1 && vec.x >= -1.2 && vec.x <= 1.2 && vec.y >= -1.2 && vec.y <= 1.2) {{
-                    const screenX = (vec.x * 0.5 + 0.5) * cWidth;
-                    const screenY = (-(vec.y * 0.5) + 0.5) * cHeight;
-                    
-                    // Calculate distance to center of screen for priority
-                    const dist = Math.abs(screenX - cCenterX) + Math.abs(screenY - cCenterY);
-                    
-                    labelCandidates.push({{
-                        el: lbl.element,
-                        x: screenX,
-                        y: screenY,
-                        d: dist
-                    }});
+                if (intersects.length > 0 && intersects[0].distance < direction.length() - 2) {{
+                     element.style.display = 'none';
                 }} else {{
-                    if (lbl.element.style.display !== 'none') lbl.element.style.display = 'none';
+                     element.style.display = 'block';
                 }}
-            }}
-
-            // 2. Sort by distance to center screen
-            labelCandidates.sort((a, b) => a.d - b.d);
-
-            // 3. Render top N, hide rest
-            for (let i = 0; i < labelCandidates.length; i++) {{
-                const cand = labelCandidates[i];
-                if (i < MAX_LABELS) {{
-                    if (cand.el.style.display !== 'block') cand.el.style.display = 'block';
-                    // Use Transform instead of Top/Left to avoid reflows
-                    cand.el.style.transform = `translate3d(${{cand.x.toFixed(1)}}px, ${{cand.y.toFixed(1)}}px, 0)`;
-                }} else {{
-                    if (cand.el.style.display !== 'none') cand.el.style.display = 'none';
-                }}
-            }}
+            }});
         }}
-
         frameCount++;
+
+        stackLabels.forEach(({{ element, position, xPos, zPos }}) => {{
+            if (element.style.display === 'none') return;
+            const rotatedX = xPos * Math.cos(rotationAngle) + zPos * Math.sin(rotationAngle);
+            const rotatedZ = -xPos * Math.sin(rotationAngle) + zPos * Math.cos(rotationAngle);
+            const rotatedPos = new THREE.Vector3(rotatedX, position.y, rotatedZ);
+            const screenPos = rotatedPos.project(camera);
+            
+            const x = (screenPos.x * 0.5 + 0.5) * container.clientWidth;
+            const y = (-(screenPos.y * 0.5) + 0.5) * container.clientHeight;
+            element.style.left = x + 'px';
+            element.style.top = y + 'px';
+        }});
         renderer.render(scene, camera);
         stats.end();
     }}
@@ -1626,6 +1555,7 @@ async function renderContent(node) {{
     currentNode = node;
     updateTreeColors();
     
+    // NEW: Force reset all cached material opacities before rendering new scene
     for (const key in stackMaterialCache) {{
         if (stackMaterialCache[key]) stackMaterialCache[key].opacity = 1.0;
     }}
@@ -1664,6 +1594,7 @@ async function renderContent(node) {{
                 else if (currentNode.children.some(c => c.path === partPath)) color = '#4f4';
             }}
             
+            // MODIFIED: Check for no_accum dot in label
             const pNode = findNodeByPath(dataTree, partPath);
             const dot = (pNode && pNode.na) ? '<span style="color:#f44;font-size:9px;vertical-align:middle;margin-left:1px;">●</span>' : '';
             
@@ -1683,51 +1614,26 @@ async function renderContent(node) {{
         if (child.ai.length > 0 && child.at.length > 0) {{
             div.style.display = 'flex';
             div.style.flexDirection = 'row';
-            
-            // 1. Create a Wrapper for Text + Nav (This stays fixed)
-            const textWrapper = document.createElement('div');
-            textWrapper.style.flex = '2';
-            textWrapper.style.position = 'relative'; // Anchor for the Nav
-            textWrapper.style.border = '1px solid white';
-            textWrapper.style.overflow = 'hidden';   // The wrapper does NOT scroll
-
-            // 2. Create the Scrollable Text Area
             const textDiv = document.createElement('div');
             textDiv.className = 'text-content';
-            textDiv.style.width = '100%';
-            textDiv.style.height = '100%';
-            textDiv.style.overflowY = 'auto'; // The text scrolls INSIDE here
-            textDiv.style.position = 'absolute'; // Fill the wrapper
-            textDiv.style.top = '0';
-            textDiv.style.left = '0';
-
+            textDiv.style.flex = '1';
+            textDiv.style.border = '1px solid white';
+            textDiv.style.position = 'relative';
+            textDiv.style.overflow = 'auto';
             let htmlContent = '';
             for (const path of child.at) {{
                 htmlContent += await loadText(path);
             }}
-            textDiv.innerHTML = htmlContent;
-
-            // 3. Create the Nav separately (Sibling to textDiv, child of Wrapper)
-            const navDiv = document.createElement('div');
             
             const hasParent = currentNode.path.split('/').length > 1;
             const firstChildWithText = currentNode.children?.find(c => c.at.length > 0);
             const leftColor = hasParent ? '#f44' : '#44f';
             const rightColor = firstChildWithText ? '#4f4' : '#44f';
+            
+            textDiv.innerHTML = htmlContent + `<div style="position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;background:black;padding:2px 5px;border:1px solid white;z-index:100"><span style="cursor:pointer;padding:0 5px;user-select:none;color:${{leftColor}}" class="text-nav-left">&#60;</span><span style="padding:0 2px">texts</span><span style="cursor:pointer;padding:0 5px;user-select:none;color:${{rightColor}}" class="text-nav-right">&#62;</span></div>`;
 
-            navDiv.innerHTML = `
-                <span style="cursor:pointer;padding:0 5px;user-select:none;color:${{leftColor}}" class="text-nav-left">&lt;</span>
-                <span style="cursor:pointer;padding:0 5px;user-select:none;color:${{rightColor}}" class="text-nav-right">&gt;</span>
-            `;
-            navDiv.style.cssText = 'position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;background:black;padding:2px 5px;border:1px solid white;z-index:100';
-
-            // 4. Assemble
-            textWrapper.appendChild(textDiv);
-            textWrapper.appendChild(navDiv);
-
-            // Re-attach listeners (query from navDiv directly)
-            const navLeft = navDiv.querySelector('.text-nav-left');
-            const navRight = navDiv.querySelector('.text-nav-right');
+            const navLeft = textDiv.querySelector('.text-nav-left');
+            const navRight = textDiv.querySelector('.text-nav-right');
             
             navLeft.onclick = () => {{
                 if (currentNode && currentNode.path) {{
@@ -1736,16 +1642,16 @@ async function renderContent(node) {{
                     if (parentNode && parentNode.at.length > 0) renderContent(parentNode);
                 }}
             }};
+            
             navRight.onclick = () => {{
                 if (currentNode && currentNode.children && currentNode.children.length > 0) {{
                     const firstChildWithText = currentNode.children.find(c => c.at.length > 0);
                     if (firstChildWithText) renderContent(firstChildWithText);
                 }}
             }};
-
-            // 5. Image Side
+            
             const imgDiv = document.createElement('div');
-            imgDiv.style.flex = '3';
+            imgDiv.style.flex = '1';
             imgDiv.style.position = 'relative';
             imgDiv.style.border = '1px solid white';
             imgDiv.style.overflow = 'hidden';
@@ -1753,16 +1659,13 @@ async function renderContent(node) {{
             if (RANDOM_TEXTDIV_POSITION) {{
                 const seed = child.path.split('').reduce((a, c) => a + c.charCodeAt(0), 0) * SEED;
                 const rand = seededRandom(seed);
-                if (rand < 0.5) {{ div.appendChild(textWrapper); div.appendChild(imgDiv); }}
-                else {{ div.appendChild(imgDiv); div.appendChild(textWrapper); }}
+                if (rand < 0.5) {{ div.appendChild(textDiv); div.appendChild(imgDiv); }}
+                else {{ div.appendChild(imgDiv); div.appendChild(textDiv); }}
             }} else {{
-                 div.appendChild(textWrapper); div.appendChild(imgDiv);
-            }}
-            
+                div.appendChild(textDiv); div.appendChild(imgDiv);
+            }} 
             div._sceneContainer = imgDiv;
             div._sceneChild = child;
-
-
         }} else if (child.ai.length > 0) {{
             div._sceneContainer = div;
             div._sceneChild = child;
@@ -1782,6 +1685,7 @@ async function renderContent(node) {{
                     else if (currentNode.children.some(c => c.path === partPath)) color = '#4f4';
                 }}
                 
+                // MODIFIED: Check for no_accum dot in text-only label
                 const pNode = findNodeByPath(dataTree, partPath);
                 const dot = (pNode && pNode.na) ? '<span style="color:#f44;font-size:9px;vertical-align:middle;margin-left:1px;">●</span>' : '';
                 
@@ -1829,13 +1733,5 @@ async function renderContent(node) {{
 </script>
 </body>
 </html>''')
-
-
-
-
-
-
-
-
 
 print("Generated spritesheets, data.json and index.html")

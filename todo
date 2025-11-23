@@ -37,11 +37,6 @@ apply to iaac, madrid, rmit, mit everywhere
 --------
 
 
-old code 28mb
-new 240kb
-
-
-initialisation takes a long time, we should fix.
 
 if a gid frames is longer then the spreadsheet, it does not work properly.
 
@@ -49,12 +44,12 @@ if a gid frames is longer then the spreadsheet, it does not work properly.
 
 control
 division set in style? can be 50% if another text div is next, 100% if its the last child , when combined with a 3d scene, it shoul dbe standard 50%, unless specified in a dot file.
-stack height should be custom too
 
-ui ux bug
+new dotfile stack_spacing can be written in with a value, needs houdini support as well
+
+
 zoom levels adjust , + also i dont think they are influenced by boundingbox
 fucking root is not accurate. or fix root name
-tags at bottom of texts moves when i scroll.......
 redesign the stack names. does not make sense to have the whole filepath there. better 3 buttons. make other stacks invisble, go back, go forth.   ---> foldable tree view with correct loading on click, no double loeading when expanding or collapsing the tree.
 bigger font for important stuff
 
@@ -79,7 +74,7 @@ need to optimize a lot, do some proper analysis with different performnce settin
 make a mobile version
 a lot of work, ventralize the the treeview
 
-
+make examples and documentation with different states
 
 
 
@@ -87,6 +82,17 @@ a lot of work, ventralize the the treeview
 
 
 in progress-------------------------
+
+old code 28mb
+new 240kb
+
+stack height should be custom too
+tags at bottom of texts moves when i scroll.......
+
+new dotfile stack_spacing can be written in with a value, needs houdini support as well
+annotations culling, lowers framerate so much
+
+initialisation takes a long time, we should fix.
 .text_image file that, when found, makes a text image on and below every stack and gives it a name like 00_text.png and ZZ_text.png so it is automatically assigned, we dont need to worry about that.
 ⭐ ⭐ ⭐ make global var for if > 1000 then load instant, if not, load gradual
 show in the treeview where the .stop_accum files ar red dot?
