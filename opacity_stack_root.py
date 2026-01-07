@@ -272,8 +272,16 @@ def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git'
     return result
 
 
-root = scan_folder(Path('.'))
-root['name'] = Path('.').resolve().name or "Root"
+# root = scan_folder(Path('.'))
+# root['name'] = Path('.').resolve().name or "Root"
+
+
+# Check if the specific project folder exists and use it as the root
+target_root = Path('archiGrad.io')
+
+if target_root.exists() and target_root.is_dir():
+    root = scan_folder(target_root)
+
 
 # ==========================================
 # LABEL GENERATION
@@ -693,26 +701,34 @@ body {{
     color: white; 
     font-family: monospace; 
     font-size: 11px;
-    display: flex;
     height: 100vh;
     overflow: hidden;
+    position: relative; /* Changed to relative to act as container */
 }}
 
 #tree {{ 
-    width: auto;
-    min-width: 300px;
-    max-width: 50%;
-    border-right: 1px solid white; 
+    position: absolute; /* Position absolute to overlay */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* Center perfectly */
+    width: 30%; /* Adjust width as needed */
+    height: 40%; /* Smaller height to form a rectangle */
     overflow-y: auto; 
     padding: 10px;
+    z-index: 1000; /* Ensure it stays on top of content */
+    background: rgba(0, 0, 0, 1); /* Semi-transparent background for readability */
+    box-shadow: 0 0 20px rgba(0,0,0,0.8);
 }}
 
 #content {{ 
-    flex: 1; 
+    width: 100%;
+    height: 100%;
     display: flex;
     flex-wrap: wrap;
     overflow: hidden;
+    z-index: 1;
 }}
+
 .tree-item {{ white-space: pre; }}
 .tree-link {{ cursor: pointer; color: #4af; }}
 .tree-link:hover {{ background: #222; }}
@@ -1294,7 +1310,7 @@ async function createThreeScene(container, images, node) {{
     const updateCount = () => {{
         const downColor = currentNode && currentNode.children.length > 0 ? '#4f4' : '#44f';
         const gridInfo = node.grid_layout ? ` [${{node.grid_layout}}]` : '';
-        countDiv.innerHTML = `<span style="cursor:pointer;padding:0 5px;user-select:none;color:#f44" id="nav-up">&#60;</span> zoom: ${{randomZoom.toFixed(2)}}${{gridInfo}} | ${{loadedStacks}}/${{totalStacks}} stacks | ${{loadedImages}}/${{totalImages}} images <span style="cursor:pointer;padding:0 5px;user-select:none;color:${{downColor}}" id="nav-down">&#62;</span>`;
+        countDiv.innerHTML = `<span style="cursor:pointer;padding:0 5px;user-select:none;color:#f44" id="nav-up">&#60;</span> zoom: ${{randomZoom.toFixed(2)}}${{gridInfo}} | ${{loadedStacks + 1}}/${{totalStacks}} stacks | ${{loadedImages}}/${{totalImages}} images <span style="cursor:pointer;padding:0 5px;user-select:none;color:${{downColor}}" id="nav-down">&#62;</span>`;
     }};
     updateCount();
     countDiv.addEventListener('click', (e) => {{
@@ -1463,45 +1479,50 @@ async function createThreeScene(container, images, node) {{
             const displayParts = currentPath ? ['..', currentFolderName, ...pathParts] : pathParts;
 
             // 1. Root (<<) - Go back all the way
-            if (currentPath) {{
-                 navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#f44;pointer-events:auto" data-path="">&lt;&lt;</span>/`;
-            }}
+            // if (currentPath) {{
+                 // navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#f44;pointer-events:auto" data-path="">&lt;&lt;</span>/`;
+            //}}
 
-            // 2. Parent (<) - Go back 1 level
-            if (currentPath) {{
-                const parentPath = currentPath.split('/').slice(0, -1).join('/');
-                navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#f44;pointer-events:auto" data-path="${{parentPath}}">&lt;</span>/`;
-            }}
 
-            // 3. Focus (Current Folder Name)
-            navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#44f;pointer-events:auto" data-path="${{currentPath}}">${{currentFolderName}}</span>`;
 
-            // 4. Intermediates (>) and Leaf (>>)
-            let relPath = '';
-            if (folderName.startsWith(currentPath + '/')) {{
-                relPath = folderName.slice(currentPath.length + 1);
-            }} else if (currentPath === '') {{
-                relPath = folderName;
-            }}
 
-            const relParts = relPath.split('/').filter(p => p);
+                        // 2. Parent (<) - Go back 1 level
+                        if (currentPath) {{
+                            const parentPath = currentPath.split('/').slice(0, -1).join('/');
+                            navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#f44;pointer-events:auto" data-path="${{parentPath}}">&lt;</span>/`;
+                        }}
+                        // 3. Focus (Current Folder Name)
+                        navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#44f;pointer-events:auto" data-path="${{currentPath}}">${{currentFolderName}}</span>`;
 
-            if (relParts.length > 0) {{
-                navHtml += '/';
-                if (relParts.length === 1) {{
-                    // Case: Immediate Child -> Show only >>
-                    navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#4f4;pointer-events:auto" data-path="${{folderName}}">&gt;&gt;</span>`;
-                }} else {{
-                    // Case: Deep Child -> Show > then >>
-                    const nextPart = relParts[0];
-                    const nextPath = currentPath ? currentPath + '/' + nextPart : nextPart;
-                    // > (Next Level)
-                    navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#4af;pointer-events:auto" data-path="${{nextPath}}">&gt;</span>/`;
-                    
-                    // >> (Lowest Child / Leaf)
-                    navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#4f4;pointer-events:auto" data-path="${{folderName}}">&gt;&gt;</span>`;
-                }}
-            }}
+                        // 4. Intermediates (>) and Leaf (>)
+                        let relPath = '';
+                        if (folderName.startsWith(currentPath + '/')) {{
+                            relPath = folderName.slice(currentPath.length + 1);
+                        }} else if (currentPath === '') {{
+                            relPath = folderName;
+                        }}
+                        
+                        const relParts = relPath.split('/').filter(p => p);
+                        
+                        if (relParts.length > 0) {{
+                            navHtml += '/';
+                            if (relParts.length === 1) {{
+                                // Case: Immediate Child -> Show only > (Modified from >>)
+                                navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#4f4;pointer-events:auto" data-path="${{folderName}}">&gt;</span>`;
+                            }} else {{
+                                // Show > for intermediate
+                                const childName = relParts[0];
+                                const childPath = currentPath ? currentPath + '/' + childName : childName;
+                                navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#4f4;pointer-events:auto" data-path="${{childPath}}">&gt;</span>`;
+                            }}
+                        }}
+
+
+
+
+
+
+
 
             // 5. Image Count
             navHtml += `<span style="background:black;padding:2px 4px;font-size:9px;margin-left:2px;pointer-events:auto">${{stackImages.length}}</span>`;

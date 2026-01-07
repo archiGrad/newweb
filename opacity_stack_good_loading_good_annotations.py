@@ -48,7 +48,7 @@ DEFAULTS = {
     # Viewer Config
     'STACK_SPACING': 0.15,
     'STACK_DIM_OPACITY': 0.1, 
-    'SEED': 2922,
+    'SEED': 293,
     'QUICKLOAD_THRESHOLD': 100,
     'ORDERED_GRID_LAYOUT': True,
     'ROTATION_SPEED': 0.000015,
@@ -273,7 +273,6 @@ def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git'
 
 
 root = scan_folder(Path('.'))
-root['name'] = Path('.').resolve().name or "Root"
 
 # ==========================================
 # LABEL GENERATION
@@ -832,6 +831,10 @@ function seededRandom(seed) {{
     return state / 4294967296;
 }}
 
+function updateURL(node) {{
+    const path = node.path || '';
+    history.pushState(null, '', '#/' + path);
+}}
 
 async function loadSpritesheet(path) {{
     if (textureCache[path]) return textureCache[path];
@@ -866,10 +869,6 @@ function getStackMaterial(texturePath, stackName) {{
     return stackMaterialCache[key];
 }}
 
-
-
-
-
 fetch('data.json')
     .then(r => r.json())
     .then(async d => {{
@@ -886,39 +885,18 @@ fetch('data.json')
 
         buildTree(dataTree, document.getElementById('tree'));
         progress = {{ss: 0, ssTotal: 0, stacks: 0, stacksTotal: 0, imgs: 0, imgsTotal: 0}};
-
-        const params = new URLSearchParams(window.location.search);
-        const path = params.get('path');
-
-        const targetNode = path ? findNodeByPath(dataTree, path) : dataTree;
-        
-        await renderContent(targetNode || dataTree);
+        await renderContent(dataTree);
         
         isInitialLoad = false;
         const loaderEl = document.getElementById('loader');
         if (loaderEl) loaderEl.remove();
-
-            const hash = window.location.hash.slice(2);
-
+        
+        const hash = window.location.hash.slice(2);
         if (hash) {{
-
             const node = findNodeByPath(dataTree, hash);
-
             if (node) await renderContent(node);
-
         }}
-
     }});
-
-
-
-
-
-
-
-
-
-
 
 window.addEventListener('hashchange', () => {{
     const hash = window.location.hash.slice(2);
@@ -1136,9 +1114,8 @@ async function createThreeScene(container, images, node) {{
         }}
     }}
 
- let minX = Infinity, maxX = -Infinity;
+    let minX = Infinity, maxX = -Infinity;
     let minZ = Infinity, maxZ = -Infinity;
-    
     const calculateBounds = (x, z) => {{
         minX = Math.min(minX, x);
         maxX = Math.max(maxX, x);
@@ -1147,7 +1124,6 @@ async function createThreeScene(container, images, node) {{
     }};
     const folderPositions = {{}};
     
-    // --- 2. Iterate to Calculate Scene Size ---
     if (node.grid_layout) {{
         folders.forEach((folder, stackIdx) => {{
             const row = Math.floor(stackIdx / cols);
@@ -1182,39 +1158,16 @@ async function createThreeScene(container, images, node) {{
     const meshMaxSize = 1.5 * 1.5;
     const geomWidth = maxX - minX + meshMaxSize;
     const geomDepth = maxZ - minZ + meshMaxSize;
-    
-    // Add margin (was 15 previously)
-    const maxSceneDim = Math.max(geomWidth, geomDepth) + 5;
+    const maxDim = Math.max(geomWidth, geomDepth);
+    const margin = 15;
+    const baseFrustumSize = maxDim + margin;
 
-    // Calculate Aspect Ratio from the Container
-    const aspectRatio = container.clientWidth / container.clientHeight;
-
-    // FIT LOGIC: 
-    // If Portrait (aspect < 1), div is narrow -> Zoom out (increase frustum) to fit width.
-    // If Landscape (aspect >= 1), div is wide -> Height is the limiter, use maxSceneDim.
-    const fitFrustumSize = aspectRatio < 1 ? maxSceneDim / aspectRatio : maxSceneDim;
-
-    // RANDOM ZOOM LOGIC:
     const seed = images.map(img => img.gi).reduce((a, b) => a + b, 0);
     const rand = seededRandom(seed * SEED);
+    const randomZoom = rand < 0.33 ? 0.1 : rand < 0.66 ? 1 : 0.1;
+    const frustumSize = baseFrustumSize * randomZoom;
 
-    let randomZoom;
-    if (rand < 0.33) {{
-        randomZoom = 0.1; // Close Up
-    }} else if (rand < 0.66) {{
-        randomZoom = 0.4; // Mid Range
-    }} else {{
-        randomZoom = 1.0; // Full Fit
-    }}
-    
-    // Debug Log (Uses correct Python f-string syntax: ${{var}})
-    console.log(`DEBUG: Seed=${{seed}}, Random=${{rand.toFixed(2)}}, Zoom=${{randomZoom.toFixed(2)}}`);
-
-
-    // Apply the random multiplier to the perfect fit
-    const frustumSize = fitFrustumSize * randomZoom;
-
-    // --- 4. Create Camera ---
+    const aspectRatio = container.clientWidth / container.clientHeight;
     const camera = new THREE.OrthographicCamera(
         frustumSize * aspectRatio / -2,
         frustumSize * aspectRatio / 2,
@@ -1666,17 +1619,10 @@ function findNodeByPath(node, targetPath) {{
 let currentNode = null;
 let isInitialLoad = true;
 
-function updateURL(node) {{
-    const path = node.path || '';
-    history.pushState(null, '', '?path=' + encodeURIComponent(path)); 
-}}
-
 async function renderContent(node) {{
     if (!isInitialLoad) updateURL(node);
     const RANDOM_TEXTDIV_POSITION = spriteConfig.random_textdiv_position;
     const SEED = spriteConfig.seed;
-
-    updateURL(node);
     currentNode = node;
     updateTreeColors();
     

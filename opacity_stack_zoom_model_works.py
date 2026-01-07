@@ -48,7 +48,7 @@ DEFAULTS = {
     # Viewer Config
     'STACK_SPACING': 0.15,
     'STACK_DIM_OPACITY': 0.1, 
-    'SEED': 2922,
+    'SEED': 295,
     'QUICKLOAD_THRESHOLD': 100,
     'ORDERED_GRID_LAYOUT': True,
     'ROTATION_SPEED': 0.000015,
@@ -273,7 +273,6 @@ def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git'
 
 
 root = scan_folder(Path('.'))
-root['name'] = Path('.').resolve().name or "Root"
 
 # ==========================================
 # LABEL GENERATION
@@ -832,6 +831,10 @@ function seededRandom(seed) {{
     return state / 4294967296;
 }}
 
+function updateURL(node) {{
+    const path = node.path || '';
+    history.pushState(null, '', '#/' + path);
+}}
 
 async function loadSpritesheet(path) {{
     if (textureCache[path]) return textureCache[path];
@@ -866,10 +869,6 @@ function getStackMaterial(texturePath, stackName) {{
     return stackMaterialCache[key];
 }}
 
-
-
-
-
 fetch('data.json')
     .then(r => r.json())
     .then(async d => {{
@@ -886,39 +885,18 @@ fetch('data.json')
 
         buildTree(dataTree, document.getElementById('tree'));
         progress = {{ss: 0, ssTotal: 0, stacks: 0, stacksTotal: 0, imgs: 0, imgsTotal: 0}};
-
-        const params = new URLSearchParams(window.location.search);
-        const path = params.get('path');
-
-        const targetNode = path ? findNodeByPath(dataTree, path) : dataTree;
-        
-        await renderContent(targetNode || dataTree);
+        await renderContent(dataTree);
         
         isInitialLoad = false;
         const loaderEl = document.getElementById('loader');
         if (loaderEl) loaderEl.remove();
-
-            const hash = window.location.hash.slice(2);
-
+        
+        const hash = window.location.hash.slice(2);
         if (hash) {{
-
             const node = findNodeByPath(dataTree, hash);
-
             if (node) await renderContent(node);
-
         }}
-
     }});
-
-
-
-
-
-
-
-
-
-
 
 window.addEventListener('hashchange', () => {{
     const hash = window.location.hash.slice(2);
@@ -1666,17 +1644,10 @@ function findNodeByPath(node, targetPath) {{
 let currentNode = null;
 let isInitialLoad = true;
 
-function updateURL(node) {{
-    const path = node.path || '';
-    history.pushState(null, '', '?path=' + encodeURIComponent(path)); 
-}}
-
 async function renderContent(node) {{
     if (!isInitialLoad) updateURL(node);
     const RANDOM_TEXTDIV_POSITION = spriteConfig.random_textdiv_position;
     const SEED = spriteConfig.seed;
-
-    updateURL(node);
     currentNode = node;
     updateTreeColors();
     

@@ -37,44 +37,35 @@ apply to iaac, madrid, rmit, mit everywhere
 --------
 
 
-
+KNOWN LIMITATION
 if a gid frames is longer then the spreadsheet, it does not work properly.
 
+
+
+
+⭐ ⭐ f ucking root is not accurate. or fix root name
+⭐⭐ ⭐    url copying does not work anymore
 ⭐⭐ ⭐ ⭐     there should be a reason for the stack. why do you want to go all the way down to the lowest child.
+⭐ ⭐ ⭐ ⭐  all exgternally set vars in 1 file? seems a bit confusing now with all different dot files.
+⭐⭐ ⭐  new dotfile stack_spacing can be written in with a value, needs houdini support as well
+⭐⭐ ⭐ ⭐  make python loadingbar. so we can check the status.
+styling
+bigger font for important stuff
+make a mobile version
+a lot of work, ventralize the the treeview
+add my comment backi in global vars. make comments in code.
+seperate styling in index 🔥  
+make examples and documentation with different states
+
 
 control
 division set in style? can be 50% if another text div is next, 100% if its the last child , when combined with a 3d scene, it shoul dbe standard 50%, unless specified in a dot file.
 
-new dotfile stack_spacing can be written in with a value, needs houdini support as well
 
-
-zoom levels adjust , + also i dont think they are influenced by boundingbox
-fucking root is not accurate. or fix root name
-redesign the stack names. does not make sense to have the whole filepath there. better 3 buttons. make other stacks invisble, go back, go forth.   ---> foldable tree view with correct loading on click, no double loeading when expanding or collapsing the tree.
-bigger font for important stuff
-
-ui design
  🔥 ⭐⭐ text underneath tree?, 
 tree in the middle of screen?  🔥 ⭐ 
 floating and collapsible tree view. ⭐⭐⭐
 
-
-maintanability
-add my comment back in global vars
-seperate styling in index 🔥  
-properly investigate the code, a lot of work
-
-
-future logic
-reconsider different packing alforithm for 2d packing
-
-performance
-need to optimize a lot, do some proper analysis with different performnce settings
-
-make a mobile version
-a lot of work, ventralize the the treeview
-
-make examples and documentation with different states
 
 
 
@@ -83,6 +74,7 @@ make examples and documentation with different states
 
 in progress-------------------------
 
+zoom levels adjust , + also i dont think they are influenced by boundingbox
 old code 28mb
 new 240kb
 

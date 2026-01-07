@@ -1294,7 +1294,7 @@ async function createThreeScene(container, images, node) {{
     const updateCount = () => {{
         const downColor = currentNode && currentNode.children.length > 0 ? '#4f4' : '#44f';
         const gridInfo = node.grid_layout ? ` [${{node.grid_layout}}]` : '';
-        countDiv.innerHTML = `<span style="cursor:pointer;padding:0 5px;user-select:none;color:#f44" id="nav-up">&#60;</span> zoom: ${{randomZoom.toFixed(2)}}${{gridInfo}} | ${{loadedStacks}}/${{totalStacks}} stacks | ${{loadedImages}}/${{totalImages}} images <span style="cursor:pointer;padding:0 5px;user-select:none;color:${{downColor}}" id="nav-down">&#62;</span>`;
+        countDiv.innerHTML = `<span style="cursor:pointer;padding:0 5px;user-select:none;color:#f44" id="nav-up">&#60;</span> zoom: ${{randomZoom.toFixed(2)}}${{gridInfo}} | ${{loadedStacks + 1}}/${{totalStacks}} stacks | ${{loadedImages}}/${{totalImages}} images <span style="cursor:pointer;padding:0 5px;user-select:none;color:${{downColor}}" id="nav-down">&#62;</span>`;
     }};
     updateCount();
     countDiv.addEventListener('click', (e) => {{

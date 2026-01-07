@@ -251,6 +251,7 @@ def scan_folder(path, parent_hidden=False, ignore=['venv', '__pycache__', '.git'
     return result
 
 root = scan_folder(Path('.'))
+#root['name'] = Path('.').resolve().name or "Root"
 
 # ==========================================
 # LABEL GENERATION
