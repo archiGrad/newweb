@@ -2,48 +2,68 @@
 <html>
 <head>
 <link rel="stylesheet" href="styles.css">
-<script src="https://unpkg.com/stats.js@0.17.0/build/stats.min.js"></script>
+<!-- <script src="https://unpkg.com/stats.js@0.17.0/build/stats.min.js"></script> -->
+
 <meta charset="utf-8">
-<style>
+
+            <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { 
     background: black; 
     color: white; 
     font-family: monospace; 
     font-size: 11px;
+    display: flex;
     height: 100vh;
     overflow: hidden;
-    position: relative; /* Changed to relative to act as container */
 }
 
-#tree { 
-    position: absolute; /* Position absolute to overlay */
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%); /* Center perfectly */
-    width: 30%; /* Adjust width as needed */
-    height: 40%; /* Smaller height to form a rectangle */
+#tree {
+    width: 300px;  /* or any fixed width */
+    min-width: 100px;
+    max-width: 50%;
     overflow-y: auto; 
     padding: 10px;
-    z-index: 1000; /* Ensure it stays on top of content */
-    background: rgba(0, 0, 0, 1); /* Semi-transparent background for readability */
-    box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;  /* Add this */
+}
+
+#tree-title {
+    font-size: 48px;
+    padding: 10px 0;
+    margin-bottom: 5px;
+    font-family: Helvetica, Arial, sans-serif;
+
+}
+
+#tree-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+#tree-footer {
+   padding: 10px 0;
+    margin-top: 10px;
+    white-space: normal;
+    word-break: break-all;
+    overflow-wrap: break-word;
 }
 
 #content { 
-    width: 100%;
-    height: 100%;
+    flex: 1; 
     display: flex;
     flex-wrap: wrap;
     overflow: hidden;
-    z-index: 1;
+            
 }
-
 .tree-item { white-space: pre; }
 .tree-link { cursor: pointer; color: #4af; }
 .tree-link:hover { background: #222; }
 .content-div {
-    border: 1px solid white;
+    border-left: 1px solid #333;
+    box-sizing: border-box;
     position: relative;
     overflow: hidden;
 }
@@ -53,7 +73,6 @@ body {
     left: 5px;
     background: black;
     padding: 2px 5px;
-    border: 1px solid white;
     z-index: 100;
 }
 .text-content {
@@ -61,7 +80,6 @@ body {
     overflow-y: auto;
     white-space: pre-wrap;
 }
-/* OPTIMIZATION: Hardware accelerated layer for labels */
 #label-container {
     position: absolute;
     top: 0;
@@ -75,7 +93,7 @@ body {
     position: absolute;
     top: 0;
     left: 0;
-    will-change: transform; /* Hint to browser to use GPU */
+    will-change: transform;
     pointer-events: none;
     cursor: pointer;
     color: white;
@@ -84,13 +102,26 @@ body {
     user-select: none;
 }
 .stack-label span {
-    pointer-events: auto; /* Re-enable clicks on the text spans */
+    pointer-events: auto;
 }
 canvas { display: block; width: 100%; height: 100%; }
 </style>
+
 </head>
 <body>
-<div id="tree"></div>
+<div id="tree">
+    <div id="tree-title">ArchiGrad<br>.io</div>
+    <div id="tree-content"></div>
+    <div id="tree-footer">
+            
+            Deniz Güvendi & Joris Putteneers <br>
+            office for architecture <br>
+            Bangkok, Sathorn
+
+
+            
+            </div>
+</div>
 <div id="content"></div>
 <script type="importmap">
 {
@@ -210,7 +241,8 @@ fetch('data.json')
         }
         hydrate(dataTree);
 
-        buildTree(dataTree, document.getElementById('tree'));
+        // buildTree(dataTree, document.getElementById('tree'));
+        buildTree(dataTree, document.getElementById('tree-content'));
         progress = {ss: 0, ssTotal: 0, stacks: 0, stacksTotal: 0, imgs: 0, imgsTotal: 0};
 
         const params = new URLSearchParams(window.location.search);
@@ -260,8 +292,8 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {
     const link = document.createElement('span');
     link.className = 'tree-link';
     
-    const naDot = node.na ? ' <span style="color:#f44;font-size:9px;vertical-align:middle;">●</span>' : '';
-    link.innerHTML = node.name + naDot;
+    const saDot = node.sa ? ' <span style="color:#ffffff;font-size:5px;vertical-align:middle;">●</span>' : '';
+    link.innerHTML = node.name + saDot;
     link.dataset.path = node.path;
     
     if (node.hid) {
@@ -289,36 +321,45 @@ function getDepthColor(depth) {
     const colors = ['#4f4', '#5e5', '#6d6', '#7c7', '#8b8', '#9a9', '#a9a', '#b8b', '#c7c', '#d6d'];
     return colors[Math.min(depth, 9)];
 }
+            
+
 
 function updateTreeColors() {
     if (!currentNode) return;
-    document.querySelectorAll('.tree-link').forEach(link => {
-        if (link.style.textDecoration === 'line-through') {
-            link.style.color = '#666';
-        } else {
-            link.style.color = '#4af';
-        }
-    });
     
-    const currentLink = document.querySelector(`.tree-link[data-path="${currentNode.path}"]`);
-    if (currentLink && !currentNode.hid) currentLink.style.color = '#44f';
-    
+    // Get all ancestor paths
+    const ancestorPaths = [];
     const pathParts = currentNode.path.split('/');
     for (let i = 1; i < pathParts.length; i++) {
-        const ancestorPath = pathParts.slice(0, i).join('/');
-        const ancestorLink = document.querySelector(`.tree-link[data-path="${ancestorPath}"]`);
-        if (ancestorLink && ancestorLink.style.textDecoration !== 'line-through') ancestorLink.style.color = '#f44';
+        ancestorPaths.push(pathParts.slice(0, i).join('/'));
     }
-
-    function colorDescendants(node, depth = 0) {
+    
+    // Get all descendant paths
+    const descendantPaths = [];
+    function collectDescendants(node) {
         node.children.forEach(child => {
-            const childLink = document.querySelector(`.tree-link[data-path="${child.path}"]`);
-            if (childLink && !child.hid) childLink.style.color = getDepthColor(depth);
-            colorDescendants(child, depth + 1);
+            descendantPaths.push(child.path);
+            collectDescendants(child);
         });
     }
-    colorDescendants(currentNode, 0);
+    if (currentNode) collectDescendants(currentNode);
+    
+    // Apply colors
+    document.querySelectorAll('.tree-link').forEach(link => {
+        const linkPath = link.dataset.path;
+        
+        if (link.style.textDecoration === 'line-through') {
+            link.style.color = '#666';
+        } else if (linkPath === currentNode.path) {
+            link.style.color = '#44f'; // Selected: blue
+        } else if (ancestorPaths.includes(linkPath) || descendantPaths.includes(linkPath)) {
+            link.style.color = 'white'; // Parents and children: white
+        } else {
+            link.style.color = '#444'; // Others: grey
+        }
+    });
 }
+            
 
 function disposeScene(sceneData) {
     if (sceneData.animationId) cancelAnimationFrame(sceneData.animationId);
@@ -350,7 +391,6 @@ async function createThreeScene(container, images, node) {
     const stackGroups = {};
 
     const SPRITESHEET_SIZE = spriteConfig.spritesheet_size;
-    const SPRITE_PADDING = spriteConfig.sprite_padding;
     const STACK_SPACING = spriteConfig.stack_spacing;
     const STACK_DIM_OPACITY = spriteConfig.stack_dim_opacity;
     const SEED = spriteConfig.seed;
@@ -618,9 +658,9 @@ async function createThreeScene(container, images, node) {
     const totalImages = images.length;
 
     const updateCount = () => {
-        const downColor = currentNode && currentNode.children.length > 0 ? '#4f4' : '#44f';
+        const downColor = currentNode && currentNode.children.length > 0 ? '#ffffff' : '#000';
         const gridInfo = node.grid_layout ? ` [${node.grid_layout}]` : '';
-        countDiv.innerHTML = `<span style="cursor:pointer;padding:0 5px;user-select:none;color:#f44" id="nav-up">&#60;</span> zoom: ${randomZoom.toFixed(2)}${gridInfo} | ${loadedStacks + 1}/${totalStacks} stacks | ${loadedImages}/${totalImages} images <span style="cursor:pointer;padding:0 5px;user-select:none;color:${downColor}" id="nav-down">&#62;</span>`;
+        countDiv.innerHTML = `zoom: ${randomZoom.toFixed(2)}${gridInfo} | ${loadedStacks + 1}/${totalStacks} stacks | ${loadedImages}/${totalImages} images`;
     };
     updateCount();
     countDiv.addEventListener('click', (e) => {
@@ -718,10 +758,10 @@ async function createThreeScene(container, images, node) {
                         const sprite_row = Math.floor(idx / rowLen);
                         
                         const size = this.userData.imgData.sz;
-                        const u_start = (sprite_col * size + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const u_start = (sprite_col * size) / SPRITESHEET_SIZE;
                         const u_end = u_start + size / SPRITESHEET_SIZE;
-                        const v_start = 1 - ((sprite_row + 1) * size + SPRITE_PADDING) / SPRITESHEET_SIZE;
-                        const v_end = 1 - (sprite_row * size + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                        const v_start = 1 - ((sprite_row + 1) * size) / SPRITESHEET_SIZE;
+                        const v_end = 1 - (sprite_row * size ) / SPRITESHEET_SIZE;
                         
                         const uvs = this.geometry.attributes.uv;
                         uvs.setXY(0, u_start, v_end);
@@ -740,10 +780,10 @@ async function createThreeScene(container, images, node) {
                     const idx = imgData.idx;
                     const sprite_col = idx % SPRITES_PER_ROW;
                     const sprite_row = Math.floor(idx / SPRITES_PER_ROW);
-                    const u_start = (sprite_col * currentSpriteSize + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                    const u_start = (sprite_col * currentSpriteSize) / SPRITESHEET_SIZE;
                     const u_end = u_start + imgData.w / SPRITESHEET_SIZE;
-                    const v_start = 1 - ((sprite_row + 1) * currentSpriteSize + SPRITE_PADDING) / SPRITESHEET_SIZE;
-                    const v_end = 1 - (sprite_row * currentSpriteSize + SPRITE_PADDING) / SPRITESHEET_SIZE;
+                    const v_start = 1 - ((sprite_row + 1) * currentSpriteSize) / SPRITESHEET_SIZE;
+                    const v_end = 1 - (sprite_row * currentSpriteSize) / SPRITESHEET_SIZE;
                     
                     const uvs = geometry.attributes.uv;
                     uvs.setXY(0, u_start, v_end);
@@ -775,7 +815,8 @@ async function createThreeScene(container, images, node) {
             progress.stacks++;
             if (progress.stacks % 5 === 0) await updateLoaderAsync();
 
-            const topY = (stackImages.length - 1) * STACK_SPACING;
+            // const topY = (stackImages.length - 1) * STACK_SPACING;
+            const topY = (stackImages.length - 1) * localSpacing;
             const worldPos = new THREE.Vector3(xPos, topY, zPos);
             const label = document.createElement('span');
 
@@ -795,37 +836,30 @@ async function createThreeScene(container, images, node) {
 
 
 
+            // 2. Parent (<) - Go back 1 level
+            if (currentPath) {
+                const parentPath = currentPath.split('/').slice(0, -1).join('/');
+                navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:white;pointer-events:auto" data-path="${parentPath}">&lt;</span>/`;
+            }
+            // 3. Focus (Current Folder Name) - THIS SHOULD BE BLUE
+            navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#44f;pointer-events:auto" data-path="${currentPath}">${currentFolderName}</span>`;
 
-                        // 2. Parent (<) - Go back 1 level
-                        if (currentPath) {
-                            const parentPath = currentPath.split('/').slice(0, -1).join('/');
-                            navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#f44;pointer-events:auto" data-path="${parentPath}">&lt;</span>/`;
-                        }
-                        // 3. Focus (Current Folder Name)
-                        navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#44f;pointer-events:auto" data-path="${currentPath}">${currentFolderName}</span>`;
+            // 4. Intermediates (>) and Leaf (>)
+            let relPath = '';
+            if (folderName.startsWith(currentPath + '/')) {
+                relPath = folderName.slice(currentPath.length + 1);
+            } else if (currentPath === '') {
+                relPath = folderName;
+            }
 
-                        // 4. Intermediates (>) and Leaf (>)
-                        let relPath = '';
-                        if (folderName.startsWith(currentPath + '/')) {
-                            relPath = folderName.slice(currentPath.length + 1);
-                        } else if (currentPath === '') {
-                            relPath = folderName;
-                        }
-                        
-                        const relParts = relPath.split('/').filter(p => p);
-                        
-                        if (relParts.length > 0) {
-                            navHtml += '/';
-                            if (relParts.length === 1) {
-                                // Case: Immediate Child -> Show only > (Modified from >>)
-                                navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#4f4;pointer-events:auto" data-path="${folderName}">&gt;</span>`;
-                            } else {
-                                // Show > for intermediate
-                                const childName = relParts[0];
-                                const childPath = currentPath ? currentPath + '/' + childName : childName;
-                                navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#4f4;pointer-events:auto" data-path="${childPath}">&gt;</span>`;
-                            }
-                        }
+            const relParts = relPath.split('/').filter(p => p);
+
+            if (relParts.length > 0) {
+                navHtml += '/';
+                const childName = relParts[0];
+                const childPath = currentPath ? currentPath + '/' + childName : childName;
+                navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:white;pointer-events:auto" data-path="${childPath}">&gt;</span>`;
+            }
 
 
 
@@ -858,12 +892,12 @@ async function createThreeScene(container, images, node) {
         }
     })();
 
-    const stats = new Stats();
-    stats.showPanel(0);
-    container.appendChild(stats.dom);
-    stats.dom.style.position = 'absolute';
-    stats.dom.style.top = '30px';
-    stats.dom.style.left = '5px';
+    // const stats = new Stats();
+    // stats.showPanel(0);
+    // container.appendChild(stats.dom);
+    // stats.dom.style.position = 'absolute';
+    // stats.dom.style.top = '30px';
+    // stats.dom.style.left = '5px';
 
     const resizeHandler = () => {
         const newAspect = container.clientWidth / container.clientHeight;
@@ -873,7 +907,8 @@ async function createThreeScene(container, images, node) {
         renderer.setSize(container.clientWidth, container.clientHeight);
     };
 
-    const sceneData = { scene, renderer, camera, controls, animationId: null, resizeHandler, stats, labelContainer, countDiv, stackGroups, focusStackGroup, unfocusAll };
+    // const sceneData = { scene, renderer, camera, controls, animationId: null, resizeHandler, stats, labelContainer, countDiv, stackGroups, focusStackGroup, unfocusAll };
+    const sceneData = { scene, renderer, camera, controls, animationId: null, resizeHandler, labelContainer, countDiv, stackGroups, focusStackGroup, unfocusAll };
 
     const frustum = new THREE.Frustum();
     const cameraViewProjectionMatrix = new THREE.Matrix4();
@@ -887,7 +922,7 @@ async function createThreeScene(container, images, node) {
     const SCREEN_BUFFER = spriteConfig.screen_buffer;
 
     function animate() {
-        stats.begin();
+        // stats.begin();
         sceneData.animationId = requestAnimationFrame(animate);
         controls.update();
         const rotationAngle = Date.now() * ROTATION_SPEED;
@@ -969,7 +1004,7 @@ async function createThreeScene(container, images, node) {
 
         frameCount++;
         renderer.render(scene, camera);
-        stats.end();
+        // stats.end();
     }
     animate();
 
@@ -1041,19 +1076,18 @@ async function renderContent(node) {
         label.className = 'div-label';
         const pathParts = child.path.split('/');
         label.innerHTML = pathParts.map((part, idx) => {
-            const partPath = pathParts.slice(0, idx + 1).join('/');
-            let color = '#4af';
-            if (currentNode) {
-                if (partPath === currentNode.path) color = '#44f';
-                else if (currentNode.path.startsWith(partPath + '/')) color = '#f44';
-                else if (currentNode.children.some(c => c.path === partPath)) color = '#4f4';
-            }
+    const partPath = pathParts.slice(0, idx + 1).join('/');
+    let color = 'white';
+    if (currentNode && partPath === currentNode.path) {
+        color = '#44f';
+    }
             
-            const pNode = findNodeByPath(dataTree, partPath);
-            const dot = (pNode && pNode.na) ? '<span style="color:#f44;font-size:9px;vertical-align:middle;margin-left:1px;">●</span>' : '';
+const pNode = findNodeByPath(dataTree, partPath);
+    const dot = (pNode && pNode.na) ? '<span style="color:#f44;font-size:9px;vertical-align:middle;margin-left:1px;">●</span>' : '';
+    
+    return `<span style="color:${color};cursor:pointer" data-path="${partPath}">${part}${dot}</span>`;
+}).join('/');
             
-            return `<span style="color:${color};cursor:pointer" data-path="${partPath}">${part}${dot}</span>`;
-        }).join('/');
         label.style.pointerEvents = 'auto';
         label.querySelectorAll('span[data-path]').forEach(span => {
             span.onclick = (e) => {
@@ -1071,9 +1105,11 @@ async function renderContent(node) {
             
             // 1. Create a Wrapper for Text + Nav (This stays fixed)
             const textWrapper = document.createElement('div');
-            textWrapper.style.flex = '2';
+            textWrapper.style.flex = '3';
             textWrapper.style.position = 'relative'; // Anchor for the Nav
-            textWrapper.style.border = '1px solid white';
+            textWrapper.style.borderLeft = '1px solid #333';
+            textWrapper.style.boxSizing = 'border-box';
+            //textWrapper.style.border = '1px solid white';
             textWrapper.style.overflow = 'hidden';   // The wrapper does NOT scroll
 
             // 2. Create the Scrollable Text Area
@@ -1104,7 +1140,7 @@ async function renderContent(node) {
                 <span style="cursor:pointer;padding:0 5px;user-select:none;color:${leftColor}" class="text-nav-left">&lt;</span>
                 <span style="cursor:pointer;padding:0 5px;user-select:none;color:${rightColor}" class="text-nav-right">&gt;</span>
             `;
-            navDiv.style.cssText = 'position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;background:black;padding:2px 5px;border:1px solid white;z-index:100';
+            navDiv.style.cssText = 'position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;padding:2px 5px;z-index:100';
 
             // 4. Assemble
             textWrapper.appendChild(textDiv);
@@ -1132,7 +1168,8 @@ async function renderContent(node) {
             const imgDiv = document.createElement('div');
             imgDiv.style.flex = '3';
             imgDiv.style.position = 'relative';
-            imgDiv.style.border = '1px solid white';
+            imgDiv.style.borderLeft = '1px solid #333';
+            imgDiv.style.boxSizing = 'border-box';
             imgDiv.style.overflow = 'hidden';
 
             if (RANDOM_TEXTDIV_POSITION) {
@@ -1160,11 +1197,9 @@ async function renderContent(node) {
             const pathParts = child.path.split('/');
             const labelHtml = pathParts.map((part, idx) => {
                 const partPath = pathParts.slice(0, idx + 1).join('/');
-                let color = '#4af';
-                if (currentNode) {
-                    if (partPath === currentNode.path) color = '#44f';
-                    else if (currentNode.path.startsWith(partPath + '/')) color = '#f44';
-                    else if (currentNode.children.some(c => c.path === partPath)) color = '#4f4';
+                let color = 'white';
+                if (currentNode && partPath === currentNode.path) {
+                    color = '#44f';
                 }
                 
                 const pNode = findNodeByPath(dataTree, partPath);
@@ -1173,8 +1208,8 @@ async function renderContent(node) {
                 return `<span style="color:${color};cursor:pointer" data-path="${partPath}">${part}${dot}</span>`;
             }).join('/');
             
-            const navHtml = `<div style="position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;background:black;padding:2px 5px;border:1px solid white"><span style="cursor:pointer;padding:0 5px;user-select:none;color:#4af" class="text-nav-left">&#60;</span><span style="padding:0 2px">texts</span><span style="cursor:pointer;padding:0 5px;user-select:none;color:#4af" class="text-nav-right">&#62;</span></div>`;
-            div.innerHTML = htmlContent + '<style>.div-label { position: absolute; top: 5px; left: 5px; background: black; padding: 2px 5px; border: 1px solid white; z-index: 100; pointer-events: auto; }</style><div class="div-label">' + labelHtml + '</div>' + navHtml;
+            const navHtml = `<div style="position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;padding:2px 5px;"><span style="cursor:pointer;padding:0 5px;user-select:none;color:#ffff" class="text-nav-left">&#60;</span><span style="padding:0 2px">texts</span><span style="cursor:pointer;padding:0 5px;user-select:none;color:#ffffff" class="text-nav-right">&#62;</span></div>`;
+            div.innerHTML = htmlContent + '<style>.div-label { position: absolute; top: 5px; left: 5px; padding: 2px 5px; z-index: 100; pointer-events: auto; }</style><div class="div-label">' + labelHtml + '</div>' + navHtml;
             
             const textLabel = div.querySelector('.div-label');
             textLabel.querySelectorAll('span[data-path]').forEach(span => {

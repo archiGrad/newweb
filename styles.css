@@ -1,5 +1,42 @@
 /* STYLING CONTENT */
 
+
+
+
+.text_center_fullscreen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    /* max-width: 300px; */
+
+}
+
+
+
+.image_center_fullscreen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+}
+
+.image_center_fullscreen img {
+    width: 100%;
+    height: auto;
+}
+
+
+
+.content_container {
+    max-width: 800px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+
+
+
 /* Image Grids */
 .image_grid_medium_cover {
     display: grid;
