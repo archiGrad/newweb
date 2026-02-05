@@ -1,6 +1,7 @@
 /venv
 /backup
 /geo
+/test
 archiGrad.io/**/*.png
 archiGrad.io/**/*.jpg
 archiGrad.io/**/*.jpeg

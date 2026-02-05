@@ -41,6 +41,27 @@ KNOWN LIMITATION
 if a gid frames is longer then the spreadsheet, it does not work properly.
 
 
+tree view sopacing is too wide. dont have 2 mono characters. only have 1. 
+─ archiGrad.io
+    └── main
+        ├── 0_projects ●
+        │   ├── C
+        │   │   └── pig_anim
+        │   │       └── output
+        │   │           ├── stack_0
+        │   │           ├── stack_1
+        │   │           ├── stack_2
+        │   │           └── stack_3
+        │   ├── competitions
+        │   │   └── randall
+        │   │       └── squab_0
+        │   │           ├── stack_0
+        │   │           ├── stack_1
+        │   │           ├── stack_2
+        │   │           └── stack_3
+        │   ├── deniz
+        │   │   └──
+
 
 
 ⭐ ⭐ f ucking root is not accurate. or fix root name
@@ -59,7 +80,8 @@ make examples and documentation with different states
 
 
 control
-division set in style? can be 50% if another text div is next, 100% if its the last child , when combined with a 3d scene, it shoul dbe standard 50%, unless specified in a dot file.
+division set in style? can be 50% if another text div is next, 100% if its the la
+st child , when combined with a 3d scene, it shoul dbe standard 50%, unless specified in a dot file.
 
 
  🔥 ⭐⭐ text underneath tree?, 

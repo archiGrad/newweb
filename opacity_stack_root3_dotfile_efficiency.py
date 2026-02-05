@@ -57,7 +57,7 @@ DEFAULTS = {
     'LOADINGSCREEN_IMG_INCREMENT': 50,
 
     #stack labels/annotations 
-    'MAX_LABELS': 100,
+    'MAX_LABELS': 200,
     'SCREEN_BUFFER': 100
 
 }
@@ -304,9 +304,7 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, ignore=['venv
 target_root = Path('archiGrad.io')
 
 if target_root.exists() and target_root.is_dir():
-    print(f"Scanning {target_root}...")
     root = scan_folder(target_root, inherited_spacing=None)
-    print(f"  Found {len(root['ai'])} images")
 
 
 # ==========================================
@@ -529,7 +527,7 @@ def collect_images_with_config(node, parent_config):
         collect_images_with_config(child, current_config)
 
 collect_images_with_config(root, DEFAULTS)
-print(f"Processing {len(all_image_items)} images into spritesheets...")
+
 all_image_items.sort(key=lambda x: (x['conf']['SPRITE_SIZE'], x['path']))
 
 # ==========================================
@@ -546,18 +544,7 @@ current_sheet_size = 0
 sheet = None
 slot_idx = 0
 
-
-total_items = len(all_image_items)
-progress_step = max(1, total_items // 10)
-
-
-
-for i,item in enumerate(all_image_items):
-
-    if i % progress_step == 0:
-        print(f"  {i}/{total_items} ({100*i//total_items}%)")
-
-
+for item in all_image_items:
     img_path = item['path']
     conf = item['conf']
     
@@ -648,8 +635,6 @@ for i,item in enumerate(all_image_items):
 if sheet:
     sheet.save(f'spritesheets/sprites_{sheet_idx}.{DEFAULTS["SPRITESHEET_FORMAT"]}')
 
-print(f"  {total_items}/{total_items} (100%) - {sheet_idx + 1} spritesheets")
-
 # ==========================================
 # TREE PROCESSING & SAVING (OPTIMIZED)
 # ==========================================
@@ -736,6 +721,7 @@ with open('index.html', 'w', encoding='utf-8') as f:
 <html>
 <head>
 <link rel="stylesheet" href="styles.css">
+
 <!-- <script src="https://unpkg.com/stats.js@0.17.0/build/stats.min.js"></script> -->
 
 <meta charset="utf-8">
@@ -753,9 +739,8 @@ body {{
 }}
 
 #tree {{
-    width: 300px;  /* or any fixed width */
     min-width: 100px;
-    max-width: 50%;
+    max-width: 300px;
     overflow-y: auto; 
     padding: 10px;
     position: relative;
@@ -797,6 +782,8 @@ body {{
 .tree-link:hover {{ background: #222; }}
 .content-div {{
     border-left: 1px solid #333;
+    border-bottom: 1px solid #333;
+
     box-sizing: border-box;
     position: relative;
     overflow: hidden;
@@ -1860,7 +1847,15 @@ const pNode = findNodeByPath(dataTree, partPath);
             for (const path of child.at) {{
                 htmlContent += await loadText(path);
             }}
-            textDiv.innerHTML = htmlContent;
+            
+textDiv.innerHTML = htmlContent;
+
+const scriptTags = textDiv.querySelectorAll('script');
+scriptTags.forEach(oldScript => {{
+    const newScript = document.createElement('script');
+    newScript.textContent = oldScript.textContent;
+    oldScript.parentNode.replaceChild(newScript, oldScript);
+}});
 
             // 3. Create the Nav separately (Sibling to textDiv, child of Wrapper)
             const navDiv = document.createElement('div');
@@ -1922,11 +1917,30 @@ const pNode = findNodeByPath(dataTree, partPath);
         }} else if (child.ai.length > 0) {{
             div._sceneContainer = div;
             div._sceneChild = child;
-        }} else if (child.at.length > 0) {{
-            div.className = 'content-div text-content';
+       }} else if (child.at.length > 0) {{
+            div.className = 'content-div';
             div.style.position = 'relative';
+            div.style.overflow = 'hidden';
+            
+            const textDiv = document.createElement('div');
+            textDiv.className = 'text-content';
+            textDiv.style.width = '100%';
+            textDiv.style.height = '100%';
+            textDiv.style.overflowY = 'auto';
+            textDiv.style.position = 'absolute';
+            textDiv.style.top = '0';
+            textDiv.style.left = '0';
+            
             let htmlContent = '';
             for (const path of child.at) {{ htmlContent += await loadText(path); }}
+            textDiv.innerHTML = htmlContent;
+            
+            const scriptTags = textDiv.querySelectorAll('script');
+            scriptTags.forEach(oldScript => {{
+                const newScript = document.createElement('script');
+                newScript.textContent = oldScript.textContent;
+                oldScript.parentNode.replaceChild(newScript, oldScript);
+            }});
             
             const pathParts = child.path.split('/');
             const labelHtml = pathParts.map((part, idx) => {{
@@ -1942,19 +1956,23 @@ const pNode = findNodeByPath(dataTree, partPath);
                 return `<span style="color:${{color}};cursor:pointer" data-path="${{partPath}}">${{part}}${{dot}}</span>`;
             }}).join('/');
             
-            const navHtml = `<div style="position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;padding:2px 5px;"><span style="cursor:pointer;padding:0 5px;user-select:none;color:#ffff" class="text-nav-left">&#60;</span><span style="padding:0 2px">texts</span><span style="cursor:pointer;padding:0 5px;user-select:none;color:#ffffff" class="text-nav-right">&#62;</span></div>`;
-            div.innerHTML = htmlContent + '<style>.div-label {{ position: absolute; top: 5px; left: 5px; padding: 2px 5px; z-index: 100; pointer-events: auto; }}</style><div class="div-label">' + labelHtml + '</div>' + navHtml;
-            
-            const textLabel = div.querySelector('.div-label');
-            textLabel.querySelectorAll('span[data-path]').forEach(span => {{
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'div-label';
+            labelDiv.innerHTML = labelHtml;
+            labelDiv.querySelectorAll('span[data-path]').forEach(span => {{
                 span.onclick = (e) => {{
                     e.stopPropagation();
                     const node = findNodeByPath(dataTree, span.dataset.path);
                     if (node) renderContent(node);
                 }};
             }});
-            const navLeft = div.querySelector('.text-nav-left');
-            const navRight = div.querySelector('.text-nav-right');
+            
+            const navDiv = document.createElement('div');
+            navDiv.innerHTML = `<span style="cursor:pointer;padding:0 5px;user-select:none;color:#ffff" class="text-nav-left">&#60;</span><span style="padding:0 2px">texts</span><span style="cursor:pointer;padding:0 5px;user-select:none;color:#ffffff" class="text-nav-right">&#62;</span>`;
+            navDiv.style.cssText = 'position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;padding:2px 5px;z-index:100';
+            
+            const navLeft = navDiv.querySelector('.text-nav-left');
+            const navRight = navDiv.querySelector('.text-nav-right');
             navLeft.onclick = () => {{
                 if (currentNode && currentNode.path) {{
                     const parentPath = currentNode.path.split('/').slice(0, -1).join('/');
@@ -1968,6 +1986,10 @@ const pNode = findNodeByPath(dataTree, partPath);
                     if (firstChildWithText) renderContent(firstChildWithText);
                 }}
             }};
+            
+            div.appendChild(textDiv);
+            div.appendChild(labelDiv);
+            div.appendChild(navDiv);
         }}
         contentDiv.appendChild(div);
     }}
