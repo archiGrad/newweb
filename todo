@@ -39,6 +39,7 @@ apply to iaac, madrid, rmit, mit everywhere
 
 KNOWN LIMITATION
 if a gid frames is longer then the spreadsheet, it does not work properly.
+camera culling is too strong in depht axis. i belive this is a camera zoom issue
 
 
 tree view sopacing is too wide. dont have 2 mono characters. only have 1. 
