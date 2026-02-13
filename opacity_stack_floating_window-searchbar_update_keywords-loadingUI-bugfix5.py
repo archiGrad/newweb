@@ -10,7 +10,7 @@ from natsort import natsorted
 
 DEFAULTS = {
     'SPRITESHEET_SIZE': 1024 * 4,
-    'SPRITE_SIZE': 512,
+    'SPRITE_SIZE': 32,
     'RESIZE_METHOD': Image.LANCZOS,
     'SPRITESHEET_FORMAT': 'webp',
     
