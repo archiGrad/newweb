@@ -1,7 +1,7 @@
 # .custom_processing - Variables you can override per folder
 
 # Sprite Configuration
-SPRITE_SIZE = 64  # int: any positive integer
+SPRITE_SIZE = 512  # int: any positive integer
 
 # Image Sharpening
 # SHARPEN = True  # bool: True, False
@@ -39,5 +39,5 @@ SPRITE_SIZE = 64  # int: any positive integer
 # SQUARE_IMAGES = True  # bool: True (force square), False (preserve aspect ratio)
 
 # Viewer Configuration
-STACK_SPACING = 0.1  # float: any positive number
-# COLORED_HTML_DOTS = 'white'
+# STACK_SPACING = 0.1  # float: any positive number
+

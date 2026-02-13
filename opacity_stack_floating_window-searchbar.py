@@ -10,7 +10,7 @@ from natsort import natsorted
 
 DEFAULTS = {
     'SPRITESHEET_SIZE': 1024 * 4,
-    'SPRITE_SIZE': 512,
+    'SPRITE_SIZE': 64,
     'RESIZE_METHOD': Image.LANCZOS,
     'SPRITESHEET_FORMAT': 'webp',
     
@@ -26,7 +26,7 @@ DEFAULTS = {
     'COLOR_TO_TRANSPARENT': 'blue',
     'COLOR_THRESHOLD': 30,
 
-    'DITHERING': True,
+    'DITHERING': False,
     'DITHER_MODE': 'custom_palette',
     'DITHER_METHOD': 'ordered',
     'DITHER_COLORS': 256,
@@ -742,7 +742,8 @@ body {{
     position: fixed;
     top: 10px;
     left: 10px;
-    width: 280px;
+    min-width: 280px;
+    width: max-content;
     max-height: 80vh;
     overflow-y: auto;
     padding: 10px;
@@ -758,6 +759,18 @@ body {{
 #tree-content {{
     flex: 1;
     overflow-y: auto;
+}}
+#tree-search {{
+    width: 50%;
+    padding: 4px 6px;
+    margin-bottom: 6px;
+    background: rgba(0,0,0,0);
+    color: white;
+    border: none;
+    font-family: monospace;
+    font-size: 11px;
+    outline: none;
+    box-sizing: border-box;
 }}
 
 #content {{ 
@@ -821,6 +834,7 @@ canvas {{ display: block; width: 100%; height: 100%; }}
 </head>
 <body>
 <div id="tree">
+    <input id="tree-search" type="text" placeholder="search..." />
     <div id="tree-content"></div>
 </div>
 <div id="content"></div>
@@ -847,6 +861,7 @@ import {{ BufferGeometryUtils }} from 'three/addons/utils/BufferGeometryUtils.js
         ox = e.clientX - tree.offsetLeft;
         oy = e.clientY - tree.offsetTop;
         tree.style.cursor = 'grabbing';
+        document.body.style.userSelect = 'none';
     }});
     document.addEventListener('mousemove', (e) => {{
         if (!dragging) return;
@@ -854,8 +869,61 @@ import {{ BufferGeometryUtils }} from 'three/addons/utils/BufferGeometryUtils.js
         tree.style.top = (e.clientY - oy) + 'px';
     }});
     document.addEventListener('mouseup', () => {{
+        if (!dragging) return;
         dragging = false;
         tree.style.cursor = 'grab';
+        document.body.style.userSelect = '';
+    }});
+}})();
+
+(() => {{
+    const searchInput = document.getElementById('tree-search');
+    searchInput.addEventListener('input', () => {{
+        const query = searchInput.value.toLowerCase().trim();
+        const treeContent = document.getElementById('tree-content');
+        if (!query) {{
+            treeContent.querySelectorAll('.tree-item, .tree-children').forEach(el => el.style.display = '');
+            treeContent.querySelectorAll('.tree-children').forEach(el => el.style.display = 'none');
+            updateCarets();
+            return;
+        }}
+        treeContent.querySelectorAll('.tree-item').forEach(el => el.style.display = 'none');
+        treeContent.querySelectorAll('.tree-children').forEach(el => el.style.display = 'none');
+        treeContent.querySelectorAll('.tree-link').forEach(link => {{
+            if (link.textContent.toLowerCase().includes(query)) {{
+                const item = link.closest('.tree-item');
+                if (item) {{
+                    item.style.display = '';
+                    const siblingChildren = item.nextElementSibling;
+                    if (siblingChildren && siblingChildren.classList.contains('tree-children')) {{
+                        siblingChildren.querySelectorAll('.tree-item').forEach(el => el.style.display = '');
+                        siblingChildren.querySelectorAll('.tree-children').forEach(el => el.style.display = 'none');
+                    }}
+                }}
+                let parent = item.parentElement;
+                while (parent && parent !== treeContent) {{
+                    if (parent.classList.contains('tree-children')) parent.style.display = 'block';
+                    if (parent.classList.contains('tree-item')) parent.style.display = '';
+                    parent = parent.parentElement;
+                }}
+            }}
+        }});
+        updateCarets();
+    }});
+    searchInput.addEventListener('mousedown', (e) => e.stopPropagation());
+    searchInput.addEventListener('keydown', (e) => {{
+        if (e.key === 'Enter') {{
+            e.preventDefault();
+            const treeContent = document.getElementById('tree-content');
+            const firstVisible = treeContent.querySelector('.tree-item:not([style*="display: none"]) .tree-link:not([style*="line-through"])');
+            if (firstVisible) firstVisible.click();
+            searchInput.value = '';
+            searchInput.dispatchEvent(new Event('input'));
+        }} else if (e.key === 'Escape') {{
+            searchInput.value = '';
+            searchInput.dispatchEvent(new Event('input'));
+            searchInput.blur();
+        }}
     }});
 }})();
 

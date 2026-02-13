@@ -10,7 +10,7 @@ from natsort import natsorted
 
 DEFAULTS = {
     'SPRITESHEET_SIZE': 1024 * 4,
-    'SPRITE_SIZE': 512,
+    'SPRITE_SIZE': 64,
     'RESIZE_METHOD': Image.LANCZOS,
     'SPRITESHEET_FORMAT': 'webp',
     
@@ -26,7 +26,7 @@ DEFAULTS = {
     'COLOR_TO_TRANSPARENT': 'blue',
     'COLOR_THRESHOLD': 30,
 
-    'DITHERING': True,
+    'DITHERING': False,
     'DITHER_MODE': 'custom_palette',
     'DITHER_METHOD': 'ordered',
     'DITHER_COLORS': 256,
@@ -204,7 +204,7 @@ def resize_image(img, target_size, conf=None):
 
 
 
-def scan_folder(path, parent_hidden=False, inherited_spacing=None, ignore=['venv', '__pycache__', '.git', 'fonts',  'spritesheets', 'images', 'backup', 'geo']):
+def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_keywords=None, ignore=['venv', '__pycache__', '.git', 'fonts',  'spritesheets', 'images', 'backup', 'geo']):
     if path.name in ignore:
         return None
     
@@ -216,10 +216,19 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, ignore=['venv
     stop_accum = False
     
     manual_spacing = inherited_spacing
+    keywords = list(inherited_keywords) if inherited_keywords else []
     
     is_hidden = parent_hidden or (path / '.hidden').exists()
     
     if path.is_dir():
+        kw_file = path / '.keywords'
+        if kw_file.exists():
+            try:
+                lines = [l.strip() for l in kw_file.read_text().splitlines() if l.strip() and not l.strip().startswith('#')]
+                keywords.extend(lines)
+            except Exception as e:
+                print(f"Warning: Error reading .keywords in {path}: {e}")
+
         grid_file = path / '.grid_layout'
         if grid_file.exists():
             grid_layout = grid_file.read_text().strip()
@@ -262,7 +271,7 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, ignore=['venv
                 elif item.suffix.lower() == '.html':
                     texts.append(item.relative_to('.').as_posix())
             elif item.is_dir():
-                child = scan_folder(item, parent_hidden=is_hidden, inherited_spacing=manual_spacing, ignore=ignore)
+                child = scan_folder(item, parent_hidden=is_hidden, inherited_spacing=manual_spacing, inherited_keywords=keywords, ignore=ignore)
                 if child:
                     children.append(child)
         
@@ -290,7 +299,8 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, ignore=['venv
         'na': no_accum,
         'sa': stop_accum,
         'hid': is_hidden,
-        'msp': manual_spacing
+        'msp': manual_spacing,
+        'sk': keywords if keywords else []
     }
     if grid_layout: result['grid_layout'] = grid_layout
     return result
@@ -740,9 +750,8 @@ body {{
 
 #tree {{
     position: fixed;
-    top: 10px;
-    left: 10px;
-    width: 280px;
+    min-width: 280px;
+    width: max-content;
     max-height: 80vh;
     overflow-y: auto;
     padding: 10px;
@@ -759,6 +768,18 @@ body {{
     flex: 1;
     overflow-y: auto;
 }}
+#tree-search {{
+    width: 60%;
+    padding: 4px 6px;
+    margin-bottom: 6px;
+    background: rgba(0,0,0,0);
+    color: white;
+    border: none;
+    font-family: monospace;
+    font-size: 11px;
+    outline: none;
+    box-sizing: border-box;
+}}
 
 #content {{ 
     flex: 1; 
@@ -768,8 +789,8 @@ body {{
             
 }}
 .tree-item {{ white-space: pre; }}
-.tree-link {{ cursor: pointer; color: #4af; }}
-.tree-link:hover {{ background: #222; }}
+.tree-link {{ cursor: pointer; color: #4af; user-select: none; }}
+.tree-caret:hover, .tree-name:hover {{ background: #222; }}
 .content-div {{
     border-left: 1px solid #333;
     border-bottom: 1px solid #333;
@@ -821,6 +842,7 @@ canvas {{ display: block; width: 100%; height: 100%; }}
 </head>
 <body>
 <div id="tree">
+    <input id="tree-search" type="text" placeholder="search..." />
     <div id="tree-content"></div>
 </div>
 <div id="content"></div>
@@ -840,32 +862,132 @@ import {{ BufferGeometryUtils }} from 'three/addons/utils/BufferGeometryUtils.js
 
 (() => {{
     const tree = document.getElementById('tree');
-    let dragging = false, ox = 0, oy = 0;
+    const treeContent = document.getElementById('tree-content');
+    const searchInput = document.getElementById('tree-search');
+    let dragging = false, ox = 0, oy = 0, tabIndex = -1, visibleMatches = [];
+
+    tree.style.left = Math.floor(Math.random() * Math.max(0, innerWidth - 300)) + 'px';
+    tree.style.top = Math.floor(Math.random() * Math.max(0, innerHeight - 400)) + 'px';
+
     tree.addEventListener('mousedown', (e) => {{
-        if (e.target.closest('.tree-link')) return;
-        dragging = true;
-        ox = e.clientX - tree.offsetLeft;
-        oy = e.clientY - tree.offsetTop;
-        tree.style.cursor = 'grabbing';
+        if (e.target.closest('.tree-link, #tree-search')) return;
+        dragging = true; ox = e.clientX - tree.offsetLeft; oy = e.clientY - tree.offsetTop;
+        tree.style.cursor = 'grabbing'; document.body.style.userSelect = 'none';
     }});
-    document.addEventListener('mousemove', (e) => {{
-        if (!dragging) return;
-        tree.style.left = (e.clientX - ox) + 'px';
-        tree.style.top = (e.clientY - oy) + 'px';
+    document.addEventListener('mousemove', (e) => {{ if (dragging) {{ tree.style.left = (e.clientX - ox) + 'px'; tree.style.top = (e.clientY - oy) + 'px'; }} }});
+    document.addEventListener('mouseup', () => {{ if (dragging) {{ dragging = false; tree.style.cursor = 'grab'; document.body.style.userSelect = ''; }} }});
+
+    function clearSearch() {{
+        visibleMatches.forEach(l => l.style.background = '');
+        searchInput.value = ''; tabIndex = -1;
+        treeContent.querySelectorAll('.tree-item').forEach(el => el.style.display = '');
+        treeContent.querySelectorAll('.tree-children').forEach(el => el.style.display = 'none');
+        updateTreeState(true);
+    }}
+
+    function highlightMatch(idx) {{
+        visibleMatches.forEach(l => l.style.background = '');
+        if (idx >= 0 && idx < visibleMatches.length) {{
+            visibleMatches[idx].style.background = '#333';
+            const item = visibleMatches[idx].closest('.tree-item');
+            if (item) {{
+                const top = item.offsetTop, bot = top + item.offsetHeight;
+                if (bot > treeContent.scrollTop + treeContent.clientHeight) treeContent.scrollTop = bot - treeContent.clientHeight;
+                else if (top < treeContent.scrollTop) treeContent.scrollTop = top;
+            }}
+        }}
+    }}
+
+    function collectVisible() {{
+        visibleMatches = Array.from(treeContent.querySelectorAll('.tree-link')).filter(link => {{
+            if (link.style.textDecoration === 'line-through') return false;
+            let el = link.closest('.tree-item');
+            while (el && el !== treeContent) {{ if (el.style.display === 'none') return false; el = el.parentElement; }}
+            return true;
+        }});
+    }}
+
+    searchInput.addEventListener('input', () => {{
+        const q = searchInput.value.toLowerCase().trim();
+        tabIndex = -1;
+        if (!q) {{ clearSearch(); return; }}
+        treeContent.querySelectorAll('.tree-item').forEach(el => el.style.display = 'none');
+        treeContent.querySelectorAll('.tree-children').forEach(el => el.style.display = 'none');
+        treeContent.querySelectorAll('.tree-link').forEach(link => {{
+            if (!link.textContent.toLowerCase().includes(q) && !(link.dataset.keywords && link.dataset.keywords.includes(q))) return;
+            const item = link.closest('.tree-item');
+            if (!item) return;
+            item.style.display = '';
+            const sib = item.nextElementSibling;
+            if (sib && sib.classList.contains('tree-children')) {{
+                sib.querySelectorAll('.tree-item').forEach(el => el.style.display = '');
+                sib.querySelectorAll('.tree-children').forEach(el => el.style.display = 'none');
+            }}
+            let p = item.parentElement;
+            while (p && p !== treeContent) {{
+                if (p.classList.contains('tree-children')) p.style.display = 'block';
+                if (p.classList.contains('tree-item')) p.style.display = '';
+                p = p.parentElement;
+            }}
+        }});
+        collectVisible();
+        updateTreeState();
     }});
-    document.addEventListener('mouseup', () => {{
-        dragging = false;
-        tree.style.cursor = 'grab';
+
+    searchInput.addEventListener('mousedown', (e) => e.stopPropagation());
+    searchInput.addEventListener('keydown', (e) => {{
+        if (e.key === 'Tab') {{
+            e.preventDefault(); collectVisible();
+            if (!visibleMatches.length) return;
+            tabIndex = e.shiftKey ? (tabIndex <= 0 ? visibleMatches.length - 1 : tabIndex - 1) : (tabIndex + 1) % visibleMatches.length;
+            highlightMatch(tabIndex);
+        }} else if (e.key === 'Enter') {{
+            e.preventDefault();
+            const target = (tabIndex >= 0 && tabIndex < visibleMatches.length) ? visibleMatches[tabIndex] : (collectVisible(), visibleMatches[0]);
+            const name = target?.querySelector('.tree-name');
+            if (name) name.click();
+            clearSearch();
+        }} else if (e.key === 'Escape') {{ clearSearch(); searchInput.blur(); }}
     }});
+    document.addEventListener('keydown', (e) => {{ if (e.key === 'Escape' && document.activeElement !== searchInput) clearSearch(); }});
 }})();
 
 const loader = document.createElement('div');
 loader.id = 'loader';
-loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:99999;font-size:11px;font-family:monospace;';
+loader.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:99999;font-family:monospace;';
 loader.textContent = 'initializing...';
 document.body.appendChild(loader);
 
+            
+const GRID_COLS = window.innerWidth > 768 ? 20 : 1;
+const GRID_ROWS = window.innerWidth > 768 ? 1 : 20;
+const GRID_TOTAL = GRID_COLS * GRID_ROWS;
+
+const _gridOrder = Array.from({{length: GRID_TOTAL}}, (_, i) => i);
+(function shuffle(a) {{
+    let s = 9301;
+    for (let i = a.length - 1; i > 0; i--) {{
+        s = (s * 16807 + 1) & 0x7fffffff;
+        const j = s % (i + 1);
+        [a[i], a[j]] = [a[j], a[i]];
+    }}
+}})(_gridOrder);
+
 let progress = {{ss: 0, ssTotal: 0, stacks: 0, stacksTotal: 0, imgs: 0, imgsTotal: 0}};
+
+function makeGrid(percent) {{
+    const filled = Math.floor((percent / 100) * GRID_TOTAL);
+    const active = new Set(_gridOrder.slice(0, filled));
+    let rows = '';
+    for (let r = 0; r < GRID_ROWS; r++) {{
+        let row = '';
+        for (let c = 0; c < GRID_COLS; c++) {{
+            row += active.has(r * GRID_COLS + c) ? '\u00B7' : '\u00A0';
+        }}
+        rows += row + '\\n';
+    }}
+    return rows;
+}}
 
 function updateLoader() {{
     const l = document.getElementById('loader');
@@ -875,21 +997,38 @@ function updateLoader() {{
     const stacksPercent = progress.stacksTotal > 0 ? Math.floor((progress.stacks / progress.stacksTotal) * 100) : 0;
     const imgsPercent = progress.imgsTotal > 0 ? Math.floor((progress.imgs / progress.imgsTotal) * 100) : 0;
     
-    const makeBar = (percent) => {{
-        const filled = Math.floor(percent / 5);
-        const empty = 20 - filled;
-        return '█'.repeat(filled) + '·'.repeat(empty);
-    }};
-    
-    l.innerHTML = `<div style="line-height:1.8;font-family:monospace;">
-        spritesheets: ${{progress.ss}}/${{progress.ssTotal}}<br>
-        ${{makeBar(ssPercent)}} ${{ssPercent}}%<br>
-        <br>
-        stacks: ${{progress.stacks}}/${{progress.stacksTotal}}<br>
-        ${{makeBar(stacksPercent)}} ${{stacksPercent}}%<br>
-        <br>
-        images: ${{progress.imgs}}/${{progress.imgsTotal}}<br>
-        ${{makeBar(imgsPercent)}} ${{imgsPercent}}%
+    const linkStyle = 'color:white;font-size:11px;text-decoration:underline;display:block;text-align:right;line-height:1.8;';
+
+    l.innerHTML = `<div style="font-family:monospace;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;">
+            <div>
+                <div style="margin-bottom:4px;">archigrad.io</div>
+                <div style="font-size:11px;">office for architecture and computation</div>
+            </div>
+            <div style="text-align:right;">
+                <a href="https://github.com/archiGrad" target="_blank" style="${{linkStyle}}">github</a>
+                <a href="#" style="${{linkStyle}}">whatsapp</a>
+                <a href="#" style="${{linkStyle}}">line</a>
+                <a href="mailto:putteneersjoris@gmail.com" style="${{linkStyle}}">email</a>
+            </div>
+        </div>
+        <div style="display:flex;gap:24px;">
+            <div style="flex:1;">
+                <div style="font-size:11px;margin-bottom:6px;">spritesheets:<br>${{progress.ss}}/${{progress.ssTotal}}</div>
+                <pre style="margin:0;font-size:10px;line-height:1.2;letter-spacing:2px;">${{makeGrid(ssPercent)}}</pre>
+                <div style="font-size:11px;margin-top:4px;">${{ssPercent}}%</div>
+            </div>
+            <div style="flex:1;">
+                <div style="font-size:11px;margin-bottom:6px;">stacks:<br>${{progress.stacks}}/${{progress.stacksTotal}}</div>
+                <pre style="margin:0;font-size:10px;line-height:1.2;letter-spacing:2px;">${{makeGrid(stacksPercent)}}</pre>
+                <div style="font-size:11px;margin-top:4px;">${{stacksPercent}}%</div>
+            </div>
+            <div style="flex:1;">
+                <div style="font-size:11px;margin-bottom:6px;">images:<br>${{progress.imgs}}/${{progress.imgsTotal}}</div>
+                <pre style="margin:0;font-size:10px;line-height:1.2;letter-spacing:2px;">${{makeGrid(imgsPercent)}}</pre>
+                <div style="font-size:11px;margin-top:4px;">${{imgsPercent}}%</div>
+            </div>
+        </div>
     </div>`;
 }}
 
@@ -962,8 +1101,8 @@ fetch('data.json')
             if (node.children) node.children.forEach(hydrate);
         }}
         hydrate(dataTree);
+        precomputeCounts(dataTree);
 
-        // buildTree(dataTree, document.getElementById('tree'));
         buildTree(dataTree, document.getElementById('tree-content'));
         progress = {{ss: 0, ssTotal: 0, stacks: 0, stacksTotal: 0, imgs: 0, imgsTotal: 0}};
 
@@ -1006,13 +1145,14 @@ window.addEventListener('hashchange', () => {{
     if (node) renderContent(node);
 }});
 
-function countDescendants(node) {{
+function precomputeCounts(node) {{
     let count = 0;
     if (node.children) {{
         for (const child of node.children) {{
-            count += 1 + countDescendants(child);
+            count += 1 + precomputeCounts(child);
         }}
     }}
+    node._dc = count;
     return count;
 }}
 
@@ -1025,12 +1165,29 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
     link.className = 'tree-link';
     
     const hasChildren = node.children && node.children.length > 0;
-    const caretHtml = hasChildren ? '<span class="tree-caret">+</span> ' : '';
     const saDot = node.sa ? ' <span style="color:#ffffff;font-size:5px;vertical-align:middle;">●</span>' : '';
-    const desc = countDescendants(node);
-    const countLabel = desc > 0 ? ` <span style="color:#666;font-size:0.85em">(${{desc}})</span>` : '';
-    link.innerHTML = caretHtml + node.name + saDot + countLabel;
+    const countLabel = node._dc > 0 ? ` <span style="color:#666;font-size:0.85em">(${{node._dc}})</span>` : '';
+
+    if (hasChildren) {{
+        const caret = document.createElement('span');
+        caret.className = 'tree-caret';
+        caret.textContent = '+';
+        caret.onclick = (e) => {{
+            e.stopPropagation();
+            const cc = link._childContainer;
+            if (cc) cc.style.display = cc.style.display === 'none' ? 'block' : 'none';
+            updateTreeState();
+        }};
+        link.appendChild(caret);
+        link.appendChild(document.createTextNode(' '));
+    }}
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'tree-name';
+    nameSpan.innerHTML = node.name + saDot + countLabel;
+    link.appendChild(nameSpan);
     link.dataset.path = node.path;
+    if (node.sk && node.sk.length) link.dataset.keywords = node.sk.join(',').toLowerCase();
     
     if (node.hid) {{
         link.style.textDecoration = 'line-through';
@@ -1038,25 +1195,12 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
         link.style.cursor = 'not-allowed';
         link.title = 'Hidden';
     }} else {{
-        link.onclick = (e) => {{
+        nameSpan.onclick = (e) => {{
             e.stopPropagation();
-            const isActive = currentNode && currentNode.path === node.path;
-            if (!isActive) {{
+            if (!currentNode || currentNode.path !== node.path) {{
                 renderContent(node);
-                updateTreeColors();
-                if (hasChildren) {{
-                    const childContainer = item.nextElementSibling;
-                    if (childContainer && childContainer.classList.contains('tree-children')) {{
-                        childContainer.style.display = 'block';
-                    }}
-                }}
-            }} else if (hasChildren) {{
-                const childContainer = item.nextElementSibling;
-                if (childContainer && childContainer.classList.contains('tree-children')) {{
-                    childContainer.style.display = childContainer.style.display === 'none' ? 'block' : 'none';
-                }}
+                updateTreeState(true);
             }}
-            updateCarets();
         }};
     }}
     
@@ -1067,6 +1211,7 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
         const childContainer = document.createElement('div');
         childContainer.className = 'tree-children';
         childContainer.style.display = 'none';
+        link._childContainer = childContainer;
         const newPrefix = prefix + (isLast ? '  ' : '│ ');
         node.children.forEach((child, i) => {{
             buildTree(child, childContainer, depth + 1, i === node.children.length - 1, newPrefix);
@@ -1075,72 +1220,29 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
     }}
 }}
 
-function updateCarets() {{
+function updateTreeState(expand) {{
     document.querySelectorAll('.tree-caret').forEach(caret => {{
-        const item = caret.closest('.tree-item');
-        if (item) {{
-            const childContainer = item.nextElementSibling;
-            if (childContainer && childContainer.classList.contains('tree-children')) {{
-                caret.textContent = childContainer.style.display === 'none' ? '+' : '-';
-            }}
-        }}
+        const link = caret.closest('.tree-link');
+        const cc = link?._childContainer;
+        if (cc) caret.textContent = cc.style.display === 'none' ? '+' : '-';
     }});
-}}
-
-function getDepthColor(depth) {{
-    const colors = ['#4f4', '#5e5', '#6d6', '#7c7', '#8b8', '#9a9', '#a9a', '#b8b', '#c7c', '#d6d'];
-    return colors[Math.min(depth, 9)];
-}}
-            
-
-
-function updateTreeColors() {{
     if (!currentNode) return;
-    
-    // Get all ancestor paths
-    const ancestorPaths = [];
-    const pathParts = currentNode.path.split('/');
-    for (let i = 1; i < pathParts.length; i++) {{
-        ancestorPaths.push(pathParts.slice(0, i).join('/'));
-    }}
-    
-    // Get all descendant paths
-    const descendantPaths = [];
-    function collectDescendants(node) {{
-        node.children.forEach(child => {{
-            descendantPaths.push(child.path);
-            collectDescendants(child);
-        }});
-    }}
-    if (currentNode) collectDescendants(currentNode);
-    
-    // Expand tree to reveal current node
-    const revealPaths = [...ancestorPaths, currentNode.path];
-    document.querySelectorAll('.tree-link').forEach(link => {{
-        const linkPath = link.dataset.path;
-        if (revealPaths.includes(linkPath)) {{
-            const childContainer = link.closest('.tree-item')?.nextElementSibling;
-            if (childContainer && childContainer.classList.contains('tree-children')) {{
-                childContainer.style.display = 'block';
-            }}
-        }}
-    }});
+    const ancestorSet = new Set(), descendantSet = new Set();
+    const parts = currentNode.path.split('/');
+    for (let i = 1; i < parts.length; i++) ancestorSet.add(parts.slice(0, i).join('/'));
+    (function collect(n) {{ n.children.forEach(c => {{ descendantSet.add(c.path); collect(c); }}); }})(currentNode);
 
-    // Apply colors
     document.querySelectorAll('.tree-link').forEach(link => {{
-        const linkPath = link.dataset.path;
-        
-        if (link.style.textDecoration === 'line-through') {{
-            link.style.color = '#666';
-        }} else if (linkPath === currentNode.path) {{
-            link.style.color = '#44f'; // Selected: blue
-        }} else if (ancestorPaths.includes(linkPath) || descendantPaths.includes(linkPath)) {{
-            link.style.color = 'white'; // Parents and children: white
-        }} else {{
-            link.style.color = '#444'; // Others: grey
+        const p = link.dataset.path;
+        if (expand && ancestorSet.has(p)) {{
+            const cc = link._childContainer;
+            if (cc) cc.style.display = 'block';
         }}
+        if (link.style.textDecoration === 'line-through') link.style.color = '#666';
+        else if (p === currentNode.path) link.style.color = '#44f';
+        else if (ancestorSet.has(p) || descendantSet.has(p)) link.style.color = 'white';
+        else link.style.color = '#444';
     }});
-    updateCarets();
 }}
             
 
@@ -1827,7 +1929,7 @@ async function renderContent(node) {{
 
     updateURL(node);
     currentNode = node;
-    updateTreeColors();
+    updateTreeState(true);
     
     for (const key in stackMaterialCache) {{
         if (stackMaterialCache[key]) stackMaterialCache[key].opacity = 1.0;
@@ -1905,10 +2007,16 @@ const pNode = findNodeByPath(dataTree, partPath);
             textDiv.style.top = '0';
             textDiv.style.left = '0';
 
-            let htmlContent = '';
+            let htmlParts = [];
             for (const path of child.at) {{
-                htmlContent += await loadText(path);
+                htmlParts.push(await loadText(path));
             }}
+            const total = htmlParts.length;
+            const htmlContent = htmlParts.map((part, i) => {{
+                const pageLabel = total > 1 ? `<div style="font-family:monospace;font-size:10px;color:#666;margin-top:12px;">${{i+1}}/${{total}}</div>` : '';
+                const separator = i < total - 1 ? '<hr style="border:none;border-top:1px solid #333;margin:20px -20px;padding:0;">' : '';
+                return part + pageLabel + separator;
+            }}).join('');
             
 textDiv.innerHTML = htmlContent;
 
@@ -1919,41 +2027,8 @@ scriptTags.forEach(oldScript => {{
     oldScript.parentNode.replaceChild(newScript, oldScript);
 }});
 
-            // 3. Create the Nav separately (Sibling to textDiv, child of Wrapper)
-            const navDiv = document.createElement('div');
-            
-            const hasParent = currentNode.path.split('/').length > 1;
-            const firstChildWithText = currentNode.children?.find(c => c.at.length > 0);
-            const leftColor = hasParent ? '#f44' : '#44f';
-            const rightColor = firstChildWithText ? '#4f4' : '#44f';
-
-            navDiv.innerHTML = `
-                <span style="cursor:pointer;padding:0 5px;user-select:none;color:${{leftColor}}" class="text-nav-left">&lt;</span>
-                <span style="cursor:pointer;padding:0 5px;user-select:none;color:${{rightColor}}" class="text-nav-right">&gt;</span>
-            `;
-            navDiv.style.cssText = 'position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;padding:2px 5px;z-index:100';
-
             // 4. Assemble
             textWrapper.appendChild(textDiv);
-            textWrapper.appendChild(navDiv);
-
-            // Re-attach listeners (query from navDiv directly)
-            const navLeft = navDiv.querySelector('.text-nav-left');
-            const navRight = navDiv.querySelector('.text-nav-right');
-            
-            navLeft.onclick = () => {{
-                if (currentNode && currentNode.path) {{
-                    const parentPath = currentNode.path.split('/').slice(0, -1).join('/');
-                    const parentNode = findNodeByPath(dataTree, parentPath) || dataTree;
-                    if (parentNode && parentNode.at.length > 0) renderContent(parentNode);
-                }}
-            }};
-            navRight.onclick = () => {{
-                if (currentNode && currentNode.children && currentNode.children.length > 0) {{
-                    const firstChildWithText = currentNode.children.find(c => c.at.length > 0);
-                    if (firstChildWithText) renderContent(firstChildWithText);
-                }}
-            }};
 
             // 5. Image Side
             const imgDiv = document.createElement('div');
@@ -1993,8 +2068,14 @@ scriptTags.forEach(oldScript => {{
             textDiv.style.top = '0';
             textDiv.style.left = '0';
             
-            let htmlContent = '';
-            for (const path of child.at) {{ htmlContent += await loadText(path); }}
+            let htmlParts = [];
+            for (const path of child.at) {{ htmlParts.push(await loadText(path)); }}
+            const total = htmlParts.length;
+            const htmlContent = htmlParts.map((part, i) => {{
+                const pageLabel = total > 1 ? `<div style="font-family:monospace;font-size:10px;color:#666;margin-top:12px;">${{i+1}}/${{total}}</div>` : '';
+                const separator = i < total - 1 ? '<hr style="border:none;border-top:1px solid #333;margin:20px -20px;padding:0;">' : '';
+                return part + pageLabel + separator;
+            }}).join('');
             textDiv.innerHTML = htmlContent;
             
             const scriptTags = textDiv.querySelectorAll('script');
@@ -2029,29 +2110,9 @@ scriptTags.forEach(oldScript => {{
                 }};
             }});
             
-            const navDiv = document.createElement('div');
-            navDiv.innerHTML = `<span style="cursor:pointer;padding:0 5px;user-select:none;color:#ffff" class="text-nav-left">&#60;</span><span style="padding:0 2px">texts</span><span style="cursor:pointer;padding:0 5px;user-select:none;color:#ffffff" class="text-nav-right">&#62;</span>`;
-            navDiv.style.cssText = 'position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;padding:2px 5px;z-index:100';
-            
-            const navLeft = navDiv.querySelector('.text-nav-left');
-            const navRight = navDiv.querySelector('.text-nav-right');
-            navLeft.onclick = () => {{
-                if (currentNode && currentNode.path) {{
-                    const parentPath = currentNode.path.split('/').slice(0, -1).join('/');
-                    const parentNode = findNodeByPath(dataTree, parentPath) || dataTree;
-                    if (parentNode && parentNode.at.length > 0) renderContent(parentNode);
-                }}
-            }};
-            navRight.onclick = () => {{
-                if (currentNode && currentNode.children && currentNode.children.length > 0) {{
-                    const firstChildWithText = currentNode.children.find(c => c.at.length > 0);
-                    if (firstChildWithText) renderContent(firstChildWithText);
-                }}
-            }};
             
             div.appendChild(textDiv);
             div.appendChild(labelDiv);
-            div.appendChild(navDiv);
         }}
         contentDiv.appendChild(div);
     }}

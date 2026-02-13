@@ -1,11 +1,15 @@
 /venv
 /backup
 /geo
-/test
 archiGrad.io/**/*.png
 archiGrad.io/**/*.jpg
 archiGrad.io/**/*.jpeg
 archiGrad.io/**/*.gif
 archiGrad.io/**/*.webp
 archiGrad.io/**/*.svg
+
+/*.hiplc
+/*.hipnc
+
+
 

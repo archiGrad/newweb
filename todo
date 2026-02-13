@@ -36,11 +36,102 @@ apply to iaac, madrid, rmit, mit everywhere
 
 --------
 
+todo
+
+
+2d
+
+going back arrow does not work, it should also go back the prev url
+
+
+trtee view does highlighting. the 3d viewer should do that too
+
+3d
+in 3d viewport, sometimes chunks are loaded oput too fast. perhaps thsis a zooming thing
+zooming factor should be set in .custom processing, + set in bottom right viewport
+when highlighting an object in 3d viewport, it sometimes clicks the wrong ones too. + there should be something else happening when highligting, perhaps a brief description of the project at annotation level? something exciting. 
+
+there should be a go to individual stack button in annotation   >>   (alrewady built somewhere)
+
+perhaps a div that shows working history would be nice too. 
+top and bottom stack enders are same resolution/spitesheet as the stackiomg. this should not be the case because then it is unreadable,. these thing s should breadbale, otherwise it does not make any sesne. there should also be an indication that we are in insert mode or visual mode.
+
+
+perhaps: investigate ditfile that continues or stops html files. it should perhaps stop from next folder, not current
+
+    make docs for 
+    - making 3d
+    - houdini-stacks export
+    - houdini stack gid export
+    - manual export
+    custom porcessing dotfile
+
+    making 2d
+    stylinng
+    layout
+    accumulation
+
+    ui 
+    how to navigate, search
+
+    how to update the website. set up branches etc
+
+
 
 KNOWN LIMITATION
 if a gid frames is longer then the spreadsheet, it does not work properly.
-camera culling is too strong in depht axis. i belive this is a camera zoom issue
 
+
+⭐⭐ ⭐ ⭐     there should be a reason for the stack. why do you want to go all the way down to the lowest child.
+⭐ ⭐ ⭐ ⭐  all exgternally set vars in 1 file? seems a bit confusing now with all different dot files.
+⭐⭐ ⭐  new dotfile stack_spacing can be written in with a value, needs houdini support as well
+styling
+
+make a mobile version
+seperate styling in index 🔥  
+make examples and documentation with different states
+
+
+
+
+
+
+in progress-------------------------
+dot file support
+
+
+heck .no accum file functionality. really usefule?
+
+when 2 html files are merged. there should be a small 1px gray border between them to avoid confusion. same color as what seperastes multiple divs
+
+
+
+
+⭐ ⭐ f ucking root is not accurate. or fix root name
+⭐⭐ ⭐    url copying does not work anymore
+
+
+⭐⭐ ⭐ ⭐  make python loadingbar. so we can check the status.
+
+
+
+
+
+
+bigger font for important stuff
+control
+division set in style? can be 50% if another text div is next, 100% if its the la
+st child , when combined with a 3d scene, it shoul dbe standard 50%, unless specified in a dot file.
+
+a lot of work, ventralize the the treeview
+add my comment backi in global vars. make comments in code.
+
+
+better introscreen. archigrad etc.
+make the blocks mono so they dont jump
+waiting time can be a lot. make the intro there
+
+goeing back arrow should bring you back
 
 tree view sopacing is too wide. dont have 2 mono characters. only have 1. 
 ─ archiGrad.io
@@ -65,42 +156,15 @@ tree view sopacing is too wide. dont have 2 mono characters. only have 1.
 
 
 
-⭐ ⭐ f ucking root is not accurate. or fix root name
-⭐⭐ ⭐    url copying does not work anymore
-⭐⭐ ⭐ ⭐     there should be a reason for the stack. why do you want to go all the way down to the lowest child.
-⭐ ⭐ ⭐ ⭐  all exgternally set vars in 1 file? seems a bit confusing now with all different dot files.
-⭐⭐ ⭐  new dotfile stack_spacing can be written in with a value, needs houdini support as well
-⭐⭐ ⭐ ⭐  make python loadingbar. so we can check the status.
-styling
-bigger font for important stuff
-make a mobile version
-a lot of work, ventralize the the treeview
-add my comment backi in global vars. make comments in code.
-seperate styling in index 🔥  
-make examples and documentation with different states
 
-
-control
-division set in style? can be 50% if another text div is next, 100% if its the la
-st child , when combined with a 3d scene, it shoul dbe standard 50%, unless specified in a dot file.
-
-
- 🔥 ⭐⭐ text underneath tree?, 
 tree in the middle of screen?  🔥 ⭐ 
-floating and collapsible tree view. ⭐⭐⭐
-
-
-
-
-
-
-
-in progress-------------------------
-
 zoom levels adjust , + also i dont think they are influenced by boundingbox
 old code 28mb
 new 240kb
 
+ 🔥 ⭐⭐ text underneath tree?, 
+
+floating and collapsible tree view. ⭐⭐⭐
 stack height should be custom too
 tags at bottom of texts moves when i scroll.......
 

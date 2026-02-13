@@ -10,7 +10,7 @@ from natsort import natsorted
 
 DEFAULTS = {
     'SPRITESHEET_SIZE': 1024 * 4,
-    'SPRITE_SIZE': 512,
+    'SPRITE_SIZE': 64,
     'RESIZE_METHOD': Image.LANCZOS,
     'SPRITESHEET_FORMAT': 'webp',
     
@@ -26,7 +26,7 @@ DEFAULTS = {
     'COLOR_TO_TRANSPARENT': 'blue',
     'COLOR_THRESHOLD': 30,
 
-    'DITHERING': True,
+    'DITHERING': False,
     'DITHER_MODE': 'custom_palette',
     'DITHER_METHOD': 'ordered',
     'DITHER_COLORS': 256,
@@ -740,9 +740,8 @@ body {{
 
 #tree {{
     position: fixed;
-    top: 10px;
-    left: 10px;
-    width: 280px;
+    min-width: 280px;
+    width: max-content;
     max-height: 80vh;
     overflow-y: auto;
     padding: 10px;
@@ -759,6 +758,18 @@ body {{
     flex: 1;
     overflow-y: auto;
 }}
+#tree-search {{
+    width: 60%;
+    padding: 4px 6px;
+    margin-bottom: 6px;
+    background: rgba(0,0,0,0);
+    color: white;
+    border: none;
+    font-family: monospace;
+    font-size: 11px;
+    outline: none;
+    box-sizing: border-box;
+}}
 
 #content {{ 
     flex: 1; 
@@ -769,7 +780,7 @@ body {{
 }}
 .tree-item {{ white-space: pre; }}
 .tree-link {{ cursor: pointer; color: #4af; }}
-.tree-link:hover {{ background: #222; }}
+.tree-caret:hover, .tree-name:hover {{ background: #222; }}
 .content-div {{
     border-left: 1px solid #333;
     border-bottom: 1px solid #333;
@@ -821,6 +832,7 @@ canvas {{ display: block; width: 100%; height: 100%; }}
 </head>
 <body>
 <div id="tree">
+    <input id="tree-search" type="text" placeholder="search..." />
     <div id="tree-content"></div>
 </div>
 <div id="content"></div>
@@ -840,23 +852,94 @@ import {{ BufferGeometryUtils }} from 'three/addons/utils/BufferGeometryUtils.js
 
 (() => {{
     const tree = document.getElementById('tree');
-    let dragging = false, ox = 0, oy = 0;
+    const treeContent = document.getElementById('tree-content');
+    const searchInput = document.getElementById('tree-search');
+    let dragging = false, ox = 0, oy = 0, tabIndex = -1, visibleMatches = [];
+
+    tree.style.left = Math.floor(Math.random() * Math.max(0, innerWidth - 300)) + 'px';
+    tree.style.top = Math.floor(Math.random() * Math.max(0, innerHeight - 400)) + 'px';
+
     tree.addEventListener('mousedown', (e) => {{
-        if (e.target.closest('.tree-link')) return;
-        dragging = true;
-        ox = e.clientX - tree.offsetLeft;
-        oy = e.clientY - tree.offsetTop;
-        tree.style.cursor = 'grabbing';
+        if (e.target.closest('.tree-link, #tree-search')) return;
+        dragging = true; ox = e.clientX - tree.offsetLeft; oy = e.clientY - tree.offsetTop;
+        tree.style.cursor = 'grabbing'; document.body.style.userSelect = 'none';
     }});
-    document.addEventListener('mousemove', (e) => {{
-        if (!dragging) return;
-        tree.style.left = (e.clientX - ox) + 'px';
-        tree.style.top = (e.clientY - oy) + 'px';
+    document.addEventListener('mousemove', (e) => {{ if (dragging) {{ tree.style.left = (e.clientX - ox) + 'px'; tree.style.top = (e.clientY - oy) + 'px'; }} }});
+    document.addEventListener('mouseup', () => {{ if (dragging) {{ dragging = false; tree.style.cursor = 'grab'; document.body.style.userSelect = ''; }} }});
+
+    function clearSearch() {{
+        visibleMatches.forEach(l => l.style.background = '');
+        searchInput.value = ''; tabIndex = -1;
+        treeContent.querySelectorAll('.tree-item').forEach(el => el.style.display = '');
+        treeContent.querySelectorAll('.tree-children').forEach(el => el.style.display = 'none');
+        updateTreeState(true);
+    }}
+
+    function highlightMatch(idx) {{
+        visibleMatches.forEach(l => l.style.background = '');
+        if (idx >= 0 && idx < visibleMatches.length) {{
+            visibleMatches[idx].style.background = '#333';
+            const item = visibleMatches[idx].closest('.tree-item');
+            if (item) {{
+                const top = item.offsetTop, bot = top + item.offsetHeight;
+                if (bot > treeContent.scrollTop + treeContent.clientHeight) treeContent.scrollTop = bot - treeContent.clientHeight;
+                else if (top < treeContent.scrollTop) treeContent.scrollTop = top;
+            }}
+        }}
+    }}
+
+    function collectVisible() {{
+        visibleMatches = Array.from(treeContent.querySelectorAll('.tree-link')).filter(link => {{
+            if (link.style.textDecoration === 'line-through') return false;
+            let el = link.closest('.tree-item');
+            while (el && el !== treeContent) {{ if (el.style.display === 'none') return false; el = el.parentElement; }}
+            return true;
+        }});
+    }}
+
+    searchInput.addEventListener('input', () => {{
+        const q = searchInput.value.toLowerCase().trim();
+        tabIndex = -1;
+        if (!q) {{ clearSearch(); return; }}
+        treeContent.querySelectorAll('.tree-item').forEach(el => el.style.display = 'none');
+        treeContent.querySelectorAll('.tree-children').forEach(el => el.style.display = 'none');
+        treeContent.querySelectorAll('.tree-link').forEach(link => {{
+            if (!link.textContent.toLowerCase().includes(q)) return;
+            const item = link.closest('.tree-item');
+            if (!item) return;
+            item.style.display = '';
+            const sib = item.nextElementSibling;
+            if (sib && sib.classList.contains('tree-children')) {{
+                sib.querySelectorAll('.tree-item').forEach(el => el.style.display = '');
+                sib.querySelectorAll('.tree-children').forEach(el => el.style.display = 'none');
+            }}
+            let p = item.parentElement;
+            while (p && p !== treeContent) {{
+                if (p.classList.contains('tree-children')) p.style.display = 'block';
+                if (p.classList.contains('tree-item')) p.style.display = '';
+                p = p.parentElement;
+            }}
+        }});
+        collectVisible();
+        updateTreeState();
     }});
-    document.addEventListener('mouseup', () => {{
-        dragging = false;
-        tree.style.cursor = 'grab';
+
+    searchInput.addEventListener('mousedown', (e) => e.stopPropagation());
+    searchInput.addEventListener('keydown', (e) => {{
+        if (e.key === 'Tab') {{
+            e.preventDefault(); collectVisible();
+            if (!visibleMatches.length) return;
+            tabIndex = e.shiftKey ? (tabIndex <= 0 ? visibleMatches.length - 1 : tabIndex - 1) : (tabIndex + 1) % visibleMatches.length;
+            highlightMatch(tabIndex);
+        }} else if (e.key === 'Enter') {{
+            e.preventDefault();
+            const target = (tabIndex >= 0 && tabIndex < visibleMatches.length) ? visibleMatches[tabIndex] : (collectVisible(), visibleMatches[0]);
+            const name = target?.querySelector('.tree-name');
+            if (name) name.click();
+            clearSearch();
+        }} else if (e.key === 'Escape') {{ clearSearch(); searchInput.blur(); }}
     }});
+    document.addEventListener('keydown', (e) => {{ if (e.key === 'Escape' && document.activeElement !== searchInput) clearSearch(); }});
 }})();
 
 const loader = document.createElement('div');
@@ -962,8 +1045,8 @@ fetch('data.json')
             if (node.children) node.children.forEach(hydrate);
         }}
         hydrate(dataTree);
+        precomputeCounts(dataTree);
 
-        // buildTree(dataTree, document.getElementById('tree'));
         buildTree(dataTree, document.getElementById('tree-content'));
         progress = {{ss: 0, ssTotal: 0, stacks: 0, stacksTotal: 0, imgs: 0, imgsTotal: 0}};
 
@@ -1006,13 +1089,14 @@ window.addEventListener('hashchange', () => {{
     if (node) renderContent(node);
 }});
 
-function countDescendants(node) {{
+function precomputeCounts(node) {{
     let count = 0;
     if (node.children) {{
         for (const child of node.children) {{
-            count += 1 + countDescendants(child);
+            count += 1 + precomputeCounts(child);
         }}
     }}
+    node._dc = count;
     return count;
 }}
 
@@ -1025,11 +1109,27 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
     link.className = 'tree-link';
     
     const hasChildren = node.children && node.children.length > 0;
-    const caretHtml = hasChildren ? '<span class="tree-caret">+</span> ' : '';
     const saDot = node.sa ? ' <span style="color:#ffffff;font-size:5px;vertical-align:middle;">●</span>' : '';
-    const desc = countDescendants(node);
-    const countLabel = desc > 0 ? ` <span style="color:#666;font-size:0.85em">(${{desc}})</span>` : '';
-    link.innerHTML = caretHtml + node.name + saDot + countLabel;
+    const countLabel = node._dc > 0 ? ` <span style="color:#666;font-size:0.85em">(${{node._dc}})</span>` : '';
+
+    if (hasChildren) {{
+        const caret = document.createElement('span');
+        caret.className = 'tree-caret';
+        caret.textContent = '+';
+        caret.onclick = (e) => {{
+            e.stopPropagation();
+            const cc = link._childContainer;
+            if (cc) cc.style.display = cc.style.display === 'none' ? 'block' : 'none';
+            updateTreeState();
+        }};
+        link.appendChild(caret);
+        link.appendChild(document.createTextNode(' '));
+    }}
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'tree-name';
+    nameSpan.innerHTML = node.name + saDot + countLabel;
+    link.appendChild(nameSpan);
     link.dataset.path = node.path;
     
     if (node.hid) {{
@@ -1038,25 +1138,12 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
         link.style.cursor = 'not-allowed';
         link.title = 'Hidden';
     }} else {{
-        link.onclick = (e) => {{
+        nameSpan.onclick = (e) => {{
             e.stopPropagation();
-            const isActive = currentNode && currentNode.path === node.path;
-            if (!isActive) {{
+            if (!currentNode || currentNode.path !== node.path) {{
                 renderContent(node);
-                updateTreeColors();
-                if (hasChildren) {{
-                    const childContainer = item.nextElementSibling;
-                    if (childContainer && childContainer.classList.contains('tree-children')) {{
-                        childContainer.style.display = 'block';
-                    }}
-                }}
-            }} else if (hasChildren) {{
-                const childContainer = item.nextElementSibling;
-                if (childContainer && childContainer.classList.contains('tree-children')) {{
-                    childContainer.style.display = childContainer.style.display === 'none' ? 'block' : 'none';
-                }}
+                updateTreeState(true);
             }}
-            updateCarets();
         }};
     }}
     
@@ -1067,6 +1154,7 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
         const childContainer = document.createElement('div');
         childContainer.className = 'tree-children';
         childContainer.style.display = 'none';
+        link._childContainer = childContainer;
         const newPrefix = prefix + (isLast ? '  ' : '│ ');
         node.children.forEach((child, i) => {{
             buildTree(child, childContainer, depth + 1, i === node.children.length - 1, newPrefix);
@@ -1075,72 +1163,29 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
     }}
 }}
 
-function updateCarets() {{
+function updateTreeState(expand) {{
     document.querySelectorAll('.tree-caret').forEach(caret => {{
-        const item = caret.closest('.tree-item');
-        if (item) {{
-            const childContainer = item.nextElementSibling;
-            if (childContainer && childContainer.classList.contains('tree-children')) {{
-                caret.textContent = childContainer.style.display === 'none' ? '+' : '-';
-            }}
-        }}
+        const link = caret.closest('.tree-link');
+        const cc = link?._childContainer;
+        if (cc) caret.textContent = cc.style.display === 'none' ? '+' : '-';
     }});
-}}
-
-function getDepthColor(depth) {{
-    const colors = ['#4f4', '#5e5', '#6d6', '#7c7', '#8b8', '#9a9', '#a9a', '#b8b', '#c7c', '#d6d'];
-    return colors[Math.min(depth, 9)];
-}}
-            
-
-
-function updateTreeColors() {{
     if (!currentNode) return;
-    
-    // Get all ancestor paths
-    const ancestorPaths = [];
-    const pathParts = currentNode.path.split('/');
-    for (let i = 1; i < pathParts.length; i++) {{
-        ancestorPaths.push(pathParts.slice(0, i).join('/'));
-    }}
-    
-    // Get all descendant paths
-    const descendantPaths = [];
-    function collectDescendants(node) {{
-        node.children.forEach(child => {{
-            descendantPaths.push(child.path);
-            collectDescendants(child);
-        }});
-    }}
-    if (currentNode) collectDescendants(currentNode);
-    
-    // Expand tree to reveal current node
-    const revealPaths = [...ancestorPaths, currentNode.path];
-    document.querySelectorAll('.tree-link').forEach(link => {{
-        const linkPath = link.dataset.path;
-        if (revealPaths.includes(linkPath)) {{
-            const childContainer = link.closest('.tree-item')?.nextElementSibling;
-            if (childContainer && childContainer.classList.contains('tree-children')) {{
-                childContainer.style.display = 'block';
-            }}
-        }}
-    }});
+    const ancestorSet = new Set(), descendantSet = new Set();
+    const parts = currentNode.path.split('/');
+    for (let i = 1; i < parts.length; i++) ancestorSet.add(parts.slice(0, i).join('/'));
+    (function collect(n) {{ n.children.forEach(c => {{ descendantSet.add(c.path); collect(c); }}); }})(currentNode);
 
-    // Apply colors
     document.querySelectorAll('.tree-link').forEach(link => {{
-        const linkPath = link.dataset.path;
-        
-        if (link.style.textDecoration === 'line-through') {{
-            link.style.color = '#666';
-        }} else if (linkPath === currentNode.path) {{
-            link.style.color = '#44f'; // Selected: blue
-        }} else if (ancestorPaths.includes(linkPath) || descendantPaths.includes(linkPath)) {{
-            link.style.color = 'white'; // Parents and children: white
-        }} else {{
-            link.style.color = '#444'; // Others: grey
+        const p = link.dataset.path;
+        if (expand && ancestorSet.has(p)) {{
+            const cc = link._childContainer;
+            if (cc) cc.style.display = 'block';
         }}
+        if (link.style.textDecoration === 'line-through') link.style.color = '#666';
+        else if (p === currentNode.path) link.style.color = '#44f';
+        else if (ancestorSet.has(p) || descendantSet.has(p)) link.style.color = 'white';
+        else link.style.color = '#444';
     }});
-    updateCarets();
 }}
             
 
@@ -1827,7 +1872,7 @@ async function renderContent(node) {{
 
     updateURL(node);
     currentNode = node;
-    updateTreeColors();
+    updateTreeState(true);
     
     for (const key in stackMaterialCache) {{
         if (stackMaterialCache[key]) stackMaterialCache[key].opacity = 1.0;

@@ -10,7 +10,7 @@ from natsort import natsorted
 
 DEFAULTS = {
     'SPRITESHEET_SIZE': 1024 * 4,
-    'SPRITE_SIZE': 512,
+    'SPRITE_SIZE': 64,
     'RESIZE_METHOD': Image.LANCZOS,
     'SPRITESHEET_FORMAT': 'webp',
     
@@ -26,7 +26,7 @@ DEFAULTS = {
     'COLOR_TO_TRANSPARENT': 'blue',
     'COLOR_THRESHOLD': 30,
 
-    'DITHERING': True,
+    'DITHERING': False,
     'DITHER_MODE': 'custom_palette',
     'DITHER_METHOD': 'ordered',
     'DITHER_COLORS': 256,
@@ -742,7 +742,8 @@ body {{
     position: fixed;
     top: 10px;
     left: 10px;
-    width: 280px;
+    min-width: 280px;
+    width: max-content;
     max-height: 80vh;
     overflow-y: auto;
     padding: 10px;
@@ -847,6 +848,7 @@ import {{ BufferGeometryUtils }} from 'three/addons/utils/BufferGeometryUtils.js
         ox = e.clientX - tree.offsetLeft;
         oy = e.clientY - tree.offsetTop;
         tree.style.cursor = 'grabbing';
+        document.body.style.userSelect = 'none';
     }});
     document.addEventListener('mousemove', (e) => {{
         if (!dragging) return;
@@ -854,8 +856,10 @@ import {{ BufferGeometryUtils }} from 'three/addons/utils/BufferGeometryUtils.js
         tree.style.top = (e.clientY - oy) + 'px';
     }});
     document.addEventListener('mouseup', () => {{
+        if (!dragging) return;
         dragging = false;
         tree.style.cursor = 'grab';
+        document.body.style.userSelect = '';
     }});
 }})();
 
