@@ -60,7 +60,7 @@ body {
             
 }
 .tree-item { white-space: pre; }
-.tree-link { cursor: pointer; color: #4af; user-select: none; }
+.tree-link { cursor: pointer; color: white; user-select: none; }
 .tree-caret:hover, .tree-name:hover { background: #222; }
 .content-div {
     border-left: 1px solid #333;
@@ -103,10 +103,46 @@ body {
     font-family: monospace;
     font-size: 11px;
     user-select: none;
+    background: black;
+    line-height: 1.6;
+    white-space: nowrap;
 }
-.stack-label span {
+.stack-label span { pointer-events: auto; }
+.stack-label .cascade-item { padding: 0 4px; position: relative; }
+.stack-label .cascade-sub {
+    display: none;
+    position: absolute;
+    background: black;
     pointer-events: auto;
+    z-index: 1001;
+    min-width: max-content;
 }
+.stack-label .bc-expand { display: inline-block; position: relative; }
+.stack-label .bc-arrow { padding: 2px 4px; cursor: pointer; color: white; }
+.stack-label .bc-crumbs { display: none; position: absolute; background: black; z-index: 1000; }
+.stack-label .bc-left .bc-crumbs { right: 100%; top: 0; }
+.stack-label .bc-right { vertical-align: top; }
+.stack-label .bc-right .bc-crumbs { left: 100%; top: 0; min-width: max-content; }
+.stack-label .ancestor-level { display: inline-block; position: relative; vertical-align: top; }
+.stack-label .ancestor-parent {
+    visibility: hidden;
+    pointer-events: none;
+    position: absolute;
+    right: 100%;
+    top: 0;
+    background: black;
+}
+.stack-label .ancestor-chain-item { display: inline-block; position: relative; vertical-align: top; }
+.stack-label .cascade-item:hover > span[data-path],
+.stack-label .bc-arrow:hover,
+.stack-label .ancestor-chain-item:hover > span[data-path],
+.stack-label > span[data-path]:hover {
+    background: #222;
+}
+.stack-label .nav-arrow { color: white; margin-left: 2px; }
+.stack-label .nav-deco { color: #666; font-size: 9px; }
+.stack-label .nav-sep { color: white; }
+.stack-label .nav-count { color: white; margin-left: 2px; }
 canvas { display: block; width: 100%; height: 100%; }
 </style>
 
@@ -453,7 +489,7 @@ function precomputeCounts(node) {
 }
 
 function buildTree(node, container, depth = 0, isLast = true, prefix = '') {
-    const connector = isLast ? '└ ' : '├ ';
+    const connector = '';
     const item = document.createElement('div');
     item.className = 'tree-item';
     item.innerHTML = prefix + connector;
@@ -461,15 +497,15 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {
     link.className = 'tree-link';
     
     const hasChildren = node.children && node.children.length > 0;
-    const saDot = node.sa ? ' <span style="color:#4f4;font-size:5px;vertical-align:middle;">●</span>' : '';
-    const naDot = node.na ? ' <span style="color:#44f;font-size:5px;vertical-align:middle;">●</span>' : '';
-    const htmlDots = node.at && node.at.length > 0 ? ' ' + buildHtmlDots(node.at, 5) : '';
-    const countLabel = node._dc > 0 ? ` <span style="color:#666;font-size:0.85em">(${node._dc})</span>` : '';
+    const saDot = node.sa ? ' <span style="color:#4f4;font-size:7px;vertical-align:middle;">●</span>' : '';
+    const naDot = node.na ? ' <span style="color:#44f;font-size:7px;vertical-align:middle;">●</span>'  : '';
+    const htmlDots = node.at && node.at.length > 0 ? ' ' + buildHtmlDots(node.at, 7) : '';
+    const countLabel = node._dc > 0 ? ` <span class="tree-count" style="color:white">(${node._dc})</span>` : '';
 
     if (hasChildren) {
         const caret = document.createElement('span');
         caret.className = 'tree-caret';
-        caret.textContent = '+';
+        caret.textContent = '>';
         caret.onclick = (e) => {
             e.stopPropagation();
             const cc = link._childContainer;
@@ -510,7 +546,7 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {
         childContainer.className = 'tree-children';
         childContainer.style.display = 'none';
         link._childContainer = childContainer;
-        const newPrefix = prefix + (isLast ? '  ' : '│ ');
+        const newPrefix = prefix + '  ';
         node.children.forEach((child, i) => {
             buildTree(child, childContainer, depth + 1, i === node.children.length - 1, newPrefix);
         });
@@ -519,12 +555,14 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {
 }
 
 function updateTreeState(expand) {
-    document.querySelectorAll('.tree-caret').forEach(caret => {
-        const link = caret.closest('.tree-link');
-        const cc = link?._childContainer;
-        if (cc) caret.textContent = cc.style.display === 'none' ? '+' : '-';
-    });
-    if (!currentNode) return;
+    if (!currentNode) {
+        document.querySelectorAll('.tree-caret').forEach(caret => {
+            const link = caret.closest('.tree-link');
+            const cc = link?._childContainer;
+            if (cc) caret.textContent = cc.style.display === 'none' ? '>' : 'v';
+        });
+        return;
+    }
     const ancestorSet = new Set(), descendantSet = new Set();
     const parts = currentNode.path.split('/');
     for (let i = 1; i < parts.length; i++) ancestorSet.add(parts.slice(0, i).join('/'));
@@ -536,10 +574,19 @@ function updateTreeState(expand) {
             const cc = link._childContainer;
             if (cc) cc.style.display = 'block';
         }
-        if (link.style.textDecoration === 'line-through') link.style.color = '#666';
-        else if (p === currentNode.path) link.style.color = '#44f';
-        else if (ancestorSet.has(p) || descendantSet.has(p)) link.style.color = 'white';
-        else link.style.color = '#444';
+        let color;
+        if (link.style.textDecoration === 'line-through') color = '#666';
+        else if (p === currentNode.path) color = '#44f';
+        else if (ancestorSet.has(p) || descendantSet.has(p)) color = 'white';
+        else color = '#444';
+        link.style.color = color;
+        const countSpan = link.querySelector('.tree-count');
+        if (countSpan) countSpan.style.color = color;
+    });
+    document.querySelectorAll('.tree-caret').forEach(caret => {
+        const link = caret.closest('.tree-link');
+        const cc = link?._childContainer;
+        if (cc) caret.textContent = cc.style.display === 'none' ? '>' : 'v';
     });
 }
             
@@ -743,21 +790,30 @@ async function createThreeScene(container, images, node) {
     // If Landscape (aspect >= 1), div is wide -> Height is the limiter, use maxSceneDim.
     const fitFrustumSize = aspectRatio < 1 ? maxSceneDim / aspectRatio : maxSceneDim;
 
-    // RANDOM ZOOM LOGIC:
-    const seed = images.map(img => img.gi).reduce((a, b) => a + b, 0);
-    const rand = seededRandom(seed * SEED);
+    // ZOOM LOGIC:
+    const RANDOM_ZOOM = spriteConfig.random_zoom;
+    const GLOBAL_ZOOM_VALUE = spriteConfig.zoom_value;
+    const nodeZoom = (node && node.mzm != null) ? node.mzm : null;
 
     let randomZoom;
-    if (rand < 0.33) {
-        randomZoom = 0.1; // Close Up
-    } else if (rand < 0.66) {
-        randomZoom = 0.4; // Mid Range
+    if (nodeZoom != null) {
+        randomZoom = nodeZoom;
+    } else if (!RANDOM_ZOOM) {
+        randomZoom = GLOBAL_ZOOM_VALUE;
     } else {
-        randomZoom = 1.0; // Full Fit
+        const seed = images.map(img => img.gi).reduce((a, b) => a + b, 0);
+        const rand = seededRandom(seed * SEED);
+        if (rand < 0.33) {
+            randomZoom = 0.1;
+        } else if (rand < 0.66) {
+            randomZoom = 0.4;
+        } else {
+            randomZoom = 1.0;
+        }
     }
     
-    // Debug Log (Uses correct Python f-string syntax: ${var})
-    console.log(`DEBUG: Seed=${seed}, Random=${rand.toFixed(2)}, Zoom=${randomZoom.toFixed(2)}`);
+    console.log(`DEBUG: Zoom=${randomZoom.toFixed(2)}, RandomMode=${RANDOM_ZOOM}, NodeOverride=${nodeZoom}`);
+
 
 
     // Apply the random multiplier to the perfect fit
@@ -866,19 +922,22 @@ async function createThreeScene(container, images, node) {
             currentFocusedParent = null;
         } else {
             for (const [folder, data] of Object.entries(stackGroups)) {
-                if (folder.startsWith(parentFolder + '/') || folder === parentFolder) {
-                    data.material.opacity = 1.0;
-                } else {
-                    data.material.opacity = STACK_DIM_OPACITY;
-                }
+                const op = (folder.startsWith(parentFolder + '/') || folder === parentFolder) ? 1.0 : STACK_DIM_OPACITY;
+                data.materials.forEach(m => m.opacity = op);
             }
+            stackLabels.forEach(sl => {
+                const match = sl.folderName.startsWith(parentFolder + '/') || sl.folderName === parentFolder;
+                sl.element.style.opacity = match ? '1.0' : String(STACK_DIM_OPACITY);
+            });
             currentFocusedParent = parentFolder;
         }
     }
     function unfocusAll() {
         for (const [folder, data] of Object.entries(stackGroups)) {
-            data.material.opacity = 1.0;
+            data.materials.forEach(m => m.opacity = 1.0);
         }
+        stackLabels.forEach(sl => sl.element.style.opacity = '1.0');
+        currentFocusedParent = null;
     }
 
     const loadingPromise = (async () => {
@@ -889,6 +948,7 @@ async function createThreeScene(container, images, node) {
         
         await Promise.all([...allSpritesheets].map(ss => loadSpritesheet(ss)));
         
+        const groupLabelData = {};
         for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {
             const folderName = folders[stackIdx];
 
@@ -905,13 +965,13 @@ async function createThreeScene(container, images, node) {
             const zPos = pos.z;
 
             const stackGroup = new THREE.Group();
-            let stackMaterial = null;
+            const stackMaterials = new Set();
             const mergeBuckets = {};
             const animObjects = [];
 
             for (let i = 0; i < stackImages.length; i++) {
                 const imgData = stackImages[i];
-                if (!stackMaterial) stackMaterial = getStackMaterial(imgData.ss, folderName);
+                stackMaterials.add(getStackMaterial(imgData.ss, folderName));
                 
                 const aspect = imgData.w / imgData.h;
                 const height = 1.5;
@@ -929,7 +989,7 @@ async function createThreeScene(container, images, node) {
                 const SPRITES_PER_ROW = Math.floor(SPRITESHEET_SIZE / currentSpriteSize);
 
                 if (imgData.anim) {
-                    const mesh = new THREE.Mesh(baseGeometry.clone(), stackMaterial);
+                    const mesh = new THREE.Mesh(baseGeometry.clone(), getStackMaterial(imgData.ss, folderName));
                     mesh.applyMatrix4(matrix);
                     
                     mesh.userData = { imgData: imgData, spritesheet: imgData.ss, spritesPerRow: SPRITES_PER_ROW };
@@ -991,86 +1051,238 @@ async function createThreeScene(container, images, node) {
             }
             animObjects.forEach(obj => stackGroup.add(obj));
             scene.add(stackGroup);
-            stackGroups[folderName] = { group: stackGroup, material: stackMaterial };
+            stackGroups[folderName] = { group: stackGroup, materials: stackMaterials };
 
             updateCount();
             loadedStacks++;
             progress.stacks++;
             if (progress.stacks % 5 === 0) await updateLoaderAsync();
 
-            // const topY = (stackImages.length - 1) * STACK_SPACING;
+
+            // Collect group data for labels
             const topY = (stackImages.length - 1) * localSpacing;
-            const worldPos = new THREE.Vector3(xPos, topY, zPos);
-            const label = document.createElement('span');
-
-
-            const currentPath = currentNode ? currentNode.path : '';
-            const currentFolderName = currentPath ? currentPath.split('/').pop() : 'root';
-            let navHtml = '';
-
-            const relativePath = folderName.startsWith(currentPath) && currentPath ? folderName.slice(currentPath.length + 1) : folderName;
-            const pathParts = relativePath.split('/').filter(p => p);
-            const displayParts = currentPath ? ['..', currentFolderName, ...pathParts] : pathParts;
-
-            // 1. Root (<<) - Go back all the way
-            // if (currentPath) {
-                 // navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#f44;pointer-events:auto" data-path="">&lt;&lt;</span>/`;
-            //}
-
-
-
-            // 2. Parent (<) - Go back 1 level
-            if (currentPath) {
-                const parentPath = currentPath.split('/').slice(0, -1).join('/');
-                navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:white;pointer-events:auto" data-path="${parentPath}">&lt;</span>/`;
-            }
-            // 3. Focus (Current Folder Name) - THIS SHOULD BE BLUE
-            navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:#44f;pointer-events:auto" data-path="${currentPath}">${currentFolderName}</span>`;
-
-            // 4. Intermediates (>) and Leaf (>)
+            const scenePath = node.path || '';
             let relPath = '';
-            if (folderName.startsWith(currentPath + '/')) {
-                relPath = folderName.slice(currentPath.length + 1);
-            } else if (currentPath === '') {
+            if (folderName.startsWith(scenePath + '/')) {
+                relPath = folderName.slice(scenePath.length + 1);
+            } else if (scenePath === '') {
                 relPath = folderName;
             }
+            const groupKey = relPath.split('/').filter(p => p)[0] || folderName.split('/').pop();
+            if (!groupLabelData[groupKey]) {
+                groupLabelData[groupKey] = { maxY: topY, xPos, zPos, folders: [], scenePath };
+            }
+            if (topY > groupLabelData[groupKey].maxY) {
+                groupLabelData[groupKey].maxY = topY;
+                groupLabelData[groupKey].xPos = xPos;
+                groupLabelData[groupKey].zPos = zPos;
+            }
+            groupLabelData[groupKey].folders.push({ folderName, relPath, imageCount: stackImages.length });
+        }
 
-            const relParts = relPath.split('/').filter(p => p);
+        // Build tree from flat folder list for cascading menu
+        function buildMenuTree(folders, scenePath, groupKey) {
+            const root = { children: {}, path: scenePath + '/' + groupKey };
+            for (const f of folders) {
+                const parts = f.relPath.split('/').filter(p => p);
+                const subParts = parts.slice(1);
+                let cur = root;
+                let curPath = scenePath + '/' + groupKey;
+                for (let i = 0; i < subParts.length; i++) {
+                    curPath = curPath + '/' + subParts[i];
+                    if (!cur.children[subParts[i]]) {
+                        cur.children[subParts[i]] = { children: {}, path: curPath, imageCount: 0 };
+                    }
+                    cur = cur.children[subParts[i]];
+                }
+                cur.imageCount = f.imageCount;
+            }
+            return root;
+        }
 
-            if (relParts.length > 0) {
-                navHtml += '/';
-                const childName = relParts[0];
-                const childPath = currentPath ? currentPath + '/' + childName : childName;
-                navHtml += `<span style="background:black;padding:2px 4px;cursor:pointer;margin-right:2px;color:white;pointer-events:auto" data-path="${childPath}">&gt;</span>`;
+        function nodeDeco(n) {
+            let d = '';
+            if (n.na) d += ' <span style="color:#44f;font-size:7px;vertical-align:middle">●</span>';
+            if (n.sa) d += ' <span style="color:#4f4;font-size:7px;vertical-align:middle">●</span>';
+            if (n.at && n.at.length > 0) d += ' ' + buildHtmlDots(n.at, 7);
+            if (n._dc > 0) d += `<span class="nav-count">(${n._dc})</span>`;
+            return d;
+        }
+
+        function menuItem(name, path, color, deco, hasKids, subHtml, extraClass, extraStyle) {
+            let h = `<span style="cursor:pointer;color:${color}" data-path="${path}">${name}</span>${deco}`;
+            if (hasKids) {
+                h += `<span class="nav-arrow">&gt;</span>`;
+                h += `<div class="cascade-sub" style="${subHtml.pos}">${subHtml.content}</div>`;
+            }
+            const cls = 'cascade-item' + (extraClass ? ' ' + extraClass : '');
+            return `<div class="${cls}"${extraStyle ? ' style="' + extraStyle + '"' : ''}>${h}</div>`;
+        }
+
+        function renderChildren(children, activePath, subPos) {
+            let h = '';
+            for (const c of (children || [])) {
+                if (c.hid) continue;
+                const color = activePath === c.path ? '#44f' : 'white';
+                const hasKids = c.children && c.children.length > 0;
+                const sub = hasKids ? { pos: subPos, content: renderChildren(c.children, activePath, subPos) } : null;
+                h += menuItem(c.name, c.path, color, nodeDeco(c), hasKids, sub, '', '');
+            }
+            return h;
+        }
+
+        function buildAncestorMenu(dataTree, scenePath, activePath) {
+            const parts = scenePath ? scenePath.split('/') : [];
+            if (parts.length === 0) return '';
+            const ancestors = [];
+            for (let i = 0; i < parts.length; i++) {
+                const aNode = findNodeByPath(dataTree, parts.slice(0, i + 1).join('/'));
+                if (aNode) ancestors.push(aNode);
+            }
+            if (ancestors.length === 0) return '';
+
+            function renderLevel(idx) {
+                const a = ancestors[idx];
+                const color = activePath === a.path ? '#44f' : 'white';
+                let childrenHtml = '';
+                if (a.children && a.children.length > 0) {
+                    childrenHtml = `<div class="cascade-sub" style="left:0;top:100%">${renderChildren(a.children, activePath, 'left:100%;top:0')}</div>`;
+                }
+                let html = `<div class="cascade-item ancestor-chain-item"><span style="padding:2px 4px;cursor:pointer;color:${color}" data-path="${a.path}">${a.name}</span>${nodeDeco(a)}${childrenHtml}</div>`;
+                if (idx > 0) {
+                    html = `<div class="ancestor-level"><span class="ancestor-parent">${renderLevel(idx - 1)}<span class="nav-sep">&gt;</span></span>${html}</div>`;
+                }
+                return html;
+            }
+            return renderLevel(ancestors.length - 1);
+        }
+
+        function renderMenuLevel(treeNode, activePath, depth) {
+            depth = depth || 0;
+            const keys = Object.keys(treeNode.children);
+            if (keys.length === 0) return '';
+            let html = '';
+            for (const key of keys) {
+                const child = treeNode.children[key];
+                const hasKids = Object.keys(child.children).length > 0;
+                const color = activePath === child.path ? '#44f' : 'white';
+                const dNode = findNodeByPath(dataTree, child.path);
+                let deco = dNode ? nodeDeco(dNode) : '';
+                if (!hasKids && child.imageCount) deco += `<span class="nav-count">(${child.imageCount})</span>`;
+                const subPos = depth === 0 ? 'right:0;bottom:100%' : 'left:100%;bottom:0';
+                const sub = hasKids ? { pos: subPos, content: renderMenuLevel(child, activePath, depth + 1) } : null;
+                const style = depth === 0 ? 'display:inline-block;vertical-align:top' : '';
+                html += menuItem(key, child.path, color, deco, hasKids, sub, '', style);
+            }
+            return html;
+        }
+
+        // Create one label per group
+        const scenePath = node.path || '';
+        const activePath = currentNode ? currentNode.path : '';
+        const ancestorMenuHtml = buildAncestorMenu(dataTree, scenePath, activePath);
+        for (const [groupKey, gData] of Object.entries(groupLabelData)) {
+            const worldPos = new THREE.Vector3(gData.xPos, gData.maxY, gData.zPos);
+            const label = document.createElement('span');
+            let navHtml = '';
+            const totalImages = gData.folders.reduce((s, f) => s + f.imageCount, 0);
+
+            if (ancestorMenuHtml) {
+                navHtml += `<span class="bc-expand bc-left"><span class="bc-arrow">&lt;</span><span class="bc-crumbs">${ancestorMenuHtml}</span></span>`;
+            }
+            navHtml += `<span style="padding:2px 4px;cursor:pointer" data-path="${scenePath}">${groupKey}</span>`;
+            navHtml += `<span class="nav-count">(${totalImages})</span>`;
+
+            const menuTree = buildMenuTree(gData.folders, scenePath, groupKey);
+            const menuHtml = renderMenuLevel(menuTree, activePath);
+            if (menuHtml) {
+                navHtml += `<span class="bc-expand bc-right"><span class="bc-arrow">&gt;</span><span class="bc-crumbs">${menuHtml}</span></span>`;
             }
 
-
-
-
-
-
-
-
-            // 5. Image Count
-            navHtml += `<span style="background:black;padding:2px 4px;font-size:9px;margin-left:2px;pointer-events:auto">${stackImages.length}</span>`;
-            
             label.innerHTML = navHtml;
             label.className = 'stack-label';
-            
             label.addEventListener('wheel', (e) => { e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }, { passive: false });
             labelContainer.appendChild(label);
-            stackLabels.push({ element: label, position: worldPos, xPos, zPos, folderName });
-            
+            stackLabels.push({ element: label, position: worldPos, xPos: gData.xPos, zPos: gData.zPos, folderName: scenePath + '/' + groupKey });
+
+            // Hover helper: show/hide element pair with timeout
+            function hoverPair(trigger, target, showVal) {
+                let t = null;
+                const show = () => { clearTimeout(t); if (showVal === 'visible') { target.style.visibility = 'visible'; target.style.pointerEvents = 'auto'; } else target.style.display = showVal; };
+                const hide = () => { t = setTimeout(() => { if (showVal === 'visible') { target.style.visibility = 'hidden'; target.style.pointerEvents = 'none'; } else target.style.display = 'none'; }, 150); };
+                trigger.addEventListener('mouseenter', show);
+                trigger.addEventListener('mouseleave', hide);
+                target.addEventListener('mouseenter', show);
+                target.addEventListener('mouseleave', hide);
+            }
+
+            label.querySelectorAll('.bc-expand').forEach(bc => {
+                const mode = bc.classList.contains('bc-left') ? 'inline-block' : 'block';
+                hoverPair(bc.querySelector('.bc-arrow'), bc.querySelector('.bc-crumbs'), mode);
+            });
+
+            label.querySelectorAll('.ancestor-chain-item').forEach(item => {
+                const level = item.parentElement;
+                if (!level || !level.classList.contains('ancestor-level')) return;
+                const ap = level.querySelector(':scope > .ancestor-parent');
+                if (ap) hoverPair(item, ap, 'visible');
+            });
+
+            label.querySelectorAll('.cascade-item').forEach(item => {
+                const sub = item.querySelector('.cascade-sub');
+                if (sub) hoverPair(item, sub, 'block');
+            });
+
+            // Click logic
             label.querySelectorAll('span[data-path]').forEach(span => {
                 span.onclick = (e) => {
                     e.stopPropagation();
                     const clickedPath = span.dataset.path;
                     const clickedNode = findNodeByPath(dataTree, clickedPath);
-                    if (clickedNode && clickedNode.path === currentNode.path) {
-                        const parentFolder = folderName.split('/').slice(0, -1).join('/');
-                        focusStackGroup(parentFolder);
+                    if (clickedNode && clickedNode.path === node.path) {
+                        const groupPath = scenePath ? scenePath + '/' + groupKey : groupKey;
+                        focusStackGroup(groupPath);
                     } else if (clickedNode) renderContent(clickedNode);
                 };
+            });
+
+            let hoverDimTimeout = null;
+            label.addEventListener('mouseenter', () => {
+                clearTimeout(hoverDimTimeout);
+                if (currentFocusedParent) return;
+                const groupPath = scenePath ? scenePath + '/' + groupKey : groupKey;
+                for (const [folder, data] of Object.entries(stackGroups)) {
+                    const op = (folder.startsWith(groupPath + '/') || folder === groupPath) ? 1.0 : STACK_DIM_OPACITY;
+                    data.materials.forEach(m => m.opacity = op);
+                }
+                stackLabels.forEach(sl => {
+                    const match = sl.folderName.startsWith(groupPath + '/') || sl.folderName === groupPath;
+                    sl.element.style.opacity = match ? '1.0' : String(STACK_DIM_OPACITY);
+                });
+            });
+            label.addEventListener('mouseleave', () => {
+                hoverDimTimeout = setTimeout(() => {
+                    if (currentFocusedParent) return;
+                    for (const data of Object.values(stackGroups)) data.materials.forEach(m => m.opacity = 1.0);
+                    stackLabels.forEach(sl => sl.element.style.opacity = '1.0');
+                }, 150);
+            });
+
+            label.querySelectorAll('.cascade-item span[data-path], .ancestor-chain-item span[data-path]').forEach(span => {
+                span.addEventListener('mouseenter', () => {
+                    clearTimeout(hoverDimTimeout);
+                    if (currentFocusedParent) return;
+                    const hp = span.dataset.path;
+                    const groupPath = scenePath ? scenePath + '/' + groupKey : groupKey;
+                    for (const [folder, data] of Object.entries(stackGroups)) {
+                        const op = (folder.startsWith(hp + '/') || folder === hp) ? 1.0 : STACK_DIM_OPACITY;
+                        data.materials.forEach(m => m.opacity = op);
+                    }
+                    stackLabels.forEach(sl => {
+                        const match = sl.folderName.startsWith(hp + '/') || sl.folderName === hp || sl.element === label;
+                        sl.element.style.opacity = match ? '1.0' : String(STACK_DIM_OPACITY);
+                    });
+                });
             });
         }
     })();
@@ -1267,7 +1479,7 @@ const pNode = findNodeByPath(dataTree, partPath);
     const htmlDots = spriteConfig.breadcrumb_html_dots ? buildHtmlDots(pNode ? pNode.at : null, 9) : '';
     
     return `<span style="color:${color};cursor:pointer" data-path="${partPath}">${part}${naDot}${saDot}${htmlDots}</span>`;
-}).join('/');
+}).join(' <span style="color:white">&gt;</span> ');
             
         label.style.pointerEvents = 'auto';
         label.querySelectorAll('span[data-path]').forEach(span => {
@@ -1383,7 +1595,7 @@ scriptTags.forEach(oldScript => {
                 const htmlDots = spriteConfig.breadcrumb_html_dots ? buildHtmlDots(pNode ? pNode.at : null, 9) : '';
                 
                 return `<span style="color:${color};cursor:pointer" data-path="${partPath}">${part}${naDot}${saDot}${htmlDots}</span>`;
-            }).join('/');
+            }).join(' <span style="color:white">&gt;</span> ');
             
             const labelDiv = document.createElement('div');
             labelDiv.className = 'div-label';

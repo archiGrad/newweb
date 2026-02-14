@@ -38,27 +38,31 @@ apply to iaac, madrid, rmit, mit everywhere
 
 todo
 
+.custom_processing zoom factor set. not its random
 
 2d
 
-going back arrow does not work, it should also go back the prev url
 
 
-trtee view does highlighting. the 3d viewer should do that too
 
 3d
 in 3d viewport, sometimes chunks are loaded oput too fast. perhaps thsis a zooming thing
 zooming factor should be set in .custom processing, + set in bottom right viewport
-when highlighting an object in 3d viewport, it sometimes clicks the wrong ones too. + there should be something else happening when highligting, perhaps a brief description of the project at annotation level? something exciting. 
+ for stacks there should be something else happening when highligting, perhaps a brief description of the project at annotation level? something exciting. 
 
-there should be a go to individual stack button in annotation   >>   (alrewady built somewhere)
+rotate camera instead of stacks. should give big performance boost
+
+
+cleanup dotfiles , only 1 custom processing and grid_layout, 
 
 perhaps a div that shows working history would be nice too. 
-top and bottom stack enders are same resolution/spitesheet as the stackiomg. this should not be the case because then it is unreadable,. these thing s should breadbale, otherwise it does not make any sesne. there should also be an indication that we are in insert mode or visual mode.
 
 
-perhaps: investigate ditfile that continues or stops html files. it should perhaps stop from next folder, not current
+     user
 
+     dev
+
+     
     make docs for 
     - making 3d
     - houdini-stacks export
@@ -97,7 +101,25 @@ make examples and documentation with different states
 
 
 in progress-------------------------
+
+when highlighting an object in 3d viewport, it sometimes clicks the wrong ones too. +
+
+ok good. 1 more feasability analysis. when clicking on the annotation, the other stackgroups reduce in material opacity. when in this mode, hovering over the different annotation dirs with '>' and '<' should highlight the individual stacks or stackgroups.
+
+trtee view does highlighting. the 3d viewer should do that too
+
+going back arrow does not work, it should also go back the prev url
+
+
+top and bottom stack enders are same resolution/spitesheet as the stackiomg. this should not be the case because then it is unreadable,. these thing s should breadbale, otherwise it does not make any sesne. there should also be an indication that we are in insert mode or visual mode.
+
+
+
 dot file support
+
+
+
+perhaps: investigate ditfile that continues or stops html files. it should perhaps stop from next folder, not current
 
 
 heck .no accum file functionality. really usefule?
