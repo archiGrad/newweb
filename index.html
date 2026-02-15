@@ -13,7 +13,7 @@ body {
     background: black; 
     color: white; 
     font-family: monospace; 
-    font-size: 11px;
+    font-size: var(--font-ui, 11px);
     display: flex;
     height: 100vh;
     overflow: hidden;
@@ -47,9 +47,8 @@ body {
     color: white;
     border: none;
     font-family: monospace;
-    font-size: 11px;
+    font-size: var(--font-ui, 11px);
     outline: none;
-    box-sizing: border-box;
 }
 
 #content { 
@@ -101,7 +100,7 @@ body {
     cursor: pointer;
     color: white;
     font-family: monospace;
-    font-size: 11px;
+    font-size: var(--font-ui, 11px);
     user-select: none;
     background: black;
     line-height: 1.6;
@@ -140,9 +139,11 @@ body {
     background: #222;
 }
 .stack-label .nav-arrow { color: white; margin-left: 2px; }
-.stack-label .nav-deco { color: #666; font-size: 9px; }
+.stack-label .nav-deco { color: #666; font-size: var(--font-dots-md, 9px); }
 .stack-label .nav-sep { color: white; }
 .stack-label .nav-count { color: white; margin-left: 2px; }
+.dot-sm { font-size: var(--font-dots-sm, 7px); }
+.dot-md { font-size: var(--font-dots-md, 9px); }
 canvas { display: block; width: 100%; height: 100%; }
 </style>
 
@@ -304,13 +305,13 @@ function updateLoader() {
     const stacksPercent = progress.stacksTotal > 0 ? Math.floor((progress.stacks / progress.stacksTotal) * 100) : 0;
     const imgsPercent = progress.imgsTotal > 0 ? Math.floor((progress.imgs / progress.imgsTotal) * 100) : 0;
     
-    const linkStyle = 'color:white;font-size:11px;text-decoration:underline;display:block;text-align:right;line-height:1.8;';
+    const linkStyle = 'color:white;text-decoration:underline;display:block;text-align:right;line-height:1.8;';
 
     l.innerHTML = `<div style="font-family:monospace;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;">
             <div>
                 <div style="margin-bottom:4px;">archigrad.io</div>
-                <div style="font-size:11px;">office for architecture and computation</div>
+                <div>office for architecture and computation</div>
             </div>
             <div style="text-align:right;">
                 <a href="https://github.com/archiGrad" target="_blank" style="${linkStyle}">github</a>
@@ -321,19 +322,19 @@ function updateLoader() {
         </div>
         <div style="display:flex;gap:24px;">
             <div style="flex:1;">
-                <div style="font-size:11px;margin-bottom:6px;">spritesheets:<br>${progress.ss}/${progress.ssTotal}</div>
-                <pre style="margin:0;font-size:10px;line-height:1.2;letter-spacing:2px;">${makeGrid(ssPercent)}</pre>
-                <div style="font-size:11px;margin-top:4px;">${ssPercent}%</div>
+                <div style="margin-bottom:6px;">spritesheets:<br>${progress.ss}/${progress.ssTotal}</div>
+                <pre style="margin:0;font-size:var(--font-loading-grid, 10px);line-height:1.2;letter-spacing:2px;">${makeGrid(ssPercent)}</pre>
+                <div style="margin-top:4px;">${ssPercent}%</div>
             </div>
             <div style="flex:1;">
-                <div style="font-size:11px;margin-bottom:6px;">stacks:<br>${progress.stacks}/${progress.stacksTotal}</div>
-                <pre style="margin:0;font-size:10px;line-height:1.2;letter-spacing:2px;">${makeGrid(stacksPercent)}</pre>
-                <div style="font-size:11px;margin-top:4px;">${stacksPercent}%</div>
+                <div style="margin-bottom:6px;">stacks:<br>${progress.stacks}/${progress.stacksTotal}</div>
+                <pre style="margin:0;font-size:var(--font-loading-grid, 10px);line-height:1.2;letter-spacing:2px;">${makeGrid(stacksPercent)}</pre>
+                <div style="margin-top:4px;">${stacksPercent}%</div>
             </div>
             <div style="flex:1;">
-                <div style="font-size:11px;margin-bottom:6px;">images:<br>${progress.imgs}/${progress.imgsTotal}</div>
-                <pre style="margin:0;font-size:10px;line-height:1.2;letter-spacing:2px;">${makeGrid(imgsPercent)}</pre>
-                <div style="font-size:11px;margin-top:4px;">${imgsPercent}%</div>
+                <div style="margin-bottom:6px;">images:<br>${progress.imgs}/${progress.imgsTotal}</div>
+                <pre style="margin:0;font-size:var(--font-loading-grid, 10px);line-height:1.2;letter-spacing:2px;">${makeGrid(imgsPercent)}</pre>
+                <div style="margin-top:4px;">${imgsPercent}%</div>
             </div>
         </div>
     </div>`;
@@ -350,6 +351,10 @@ let activeScenes = [];
 const textureCache = {};
 const pendingLoads = {};
 const stackMaterialCache = {};
+const lodAvailable = {};
+const LOD_COUNT = 3;
+
+function ssBase(ssArray) { return ssArray[0].replace('_lod0', ''); }
 
 function seededRandom(seed) {
     let state = seed;
@@ -364,19 +369,45 @@ function seededColorFromPath(path) {
     return `hsl(${Math.floor(next() * 360)},${60 + Math.floor(next() * 30)}%,${50 + Math.floor(next() * 20)}%)`;
 }
 
-function buildHtmlDots(atArray, size) {
+function buildHtmlDots(atArray, sizeClass) {
     if (!atArray || atArray.length === 0) return '';
     return atArray.map(p => {
         const c = spriteConfig.colored_html_dots ? seededColorFromPath(p) : '#fff';
-        return `<span style="color:${c};font-size:${size}px;vertical-align:middle;margin-left:1px;">●</span>`;
+        return `<span class="${sizeClass}" style="color:${c};vertical-align:middle;margin-left:1px;">●</span>`;
     }).join('');
+}
+
+function dotSpan(color, cls) {
+    return `<span class="${cls}" style="color:${color};vertical-align:middle;margin-left:1px;">●</span>`;
+}
+
+function navDeco(node, cls, showHtmlDots) {
+    if (!node) return '';
+    let d = '';
+    if (node.na) d += ' ' + dotSpan('#44f', cls);
+    if (node.sa) d += ' ' + dotSpan('#4f4', cls);
+    if (showHtmlDots !== false && node.at && node.at.length > 0) d += ' ' + buildHtmlDots(node.at, cls);
+    if (node._dc > 0) d += `<span class="nav-count">(${node._dc})</span>`;
+    return d;
+}
+
+function breadcrumbHtml(path, activePath) {
+    const parts = path.split('/');
+    return parts.map((part, idx) => {
+        const partPath = parts.slice(0, idx + 1).join('/');
+        const color = (activePath && partPath === activePath) ? '#44f' : 'white';
+        const pNode = findNodeByPath(dataTree, partPath);
+        const acc = spriteConfig.show_nav_accessories;
+        const deco = acc ? navDeco(pNode, 'dot-md', spriteConfig.breadcrumb_html_dots) : '';
+        return `<span style="color:${color};cursor:pointer" data-path="${partPath}">${part}${deco}</span>`;
+    }).join(' <span style="color:white">&gt;</span> ');
 }
 
 function assembleHtmlParts(parts, paths) {
     const total = parts.length;
     return parts.map((part, i) => {
-        const dot = spriteConfig.colored_html_dots ? `<span style="color:${seededColorFromPath(paths[i])};margin-left:4px;">●</span>` : '';
-        const pageLabel = total > 1 ? `<div style="font-family:monospace;font-size:10px;color:#666;margin-top:12px;">${i+1}/${total}${dot}</div>` : '';
+        const dot = (spriteConfig.show_nav_accessories && spriteConfig.colored_html_dots) ? `<span style="color:${seededColorFromPath(paths[i])};margin-left:4px;">●</span>` : '';
+        const pageLabel = total > 1 ? `<div style="font-family:monospace;font-size:var(--font-page-index, 10px);color:#666;margin-top:12px;">${i+1}/${total}${dot}</div>` : '';
         const separator = i < total - 1 ? '<hr style="border:none;border-top:1px solid #333;margin:20px -20px;padding:0;">' : '';
         return part + pageLabel + separator;
     }).join('');
@@ -386,32 +417,52 @@ function assembleHtmlParts(parts, paths) {
 async function loadSpritesheet(path) {
     if (textureCache[path]) return textureCache[path];
     if (pendingLoads[path]) return pendingLoads[path];
-    pendingLoads[path] = new Promise((resolve) => {
-        const loader = new THREE.TextureLoader();
-        loader.load(path, (texture) => {
-            texture.minFilter = THREE.NearestFilter;
-            texture.magFilter = THREE.NearestFilter;
-            texture.generateMipmaps = false;
-            textureCache[path] = texture;
-            delete pendingLoads[path];
-            progress.ss++;
-            updateLoader();
-            resolve(texture);
-        });
-    });
+    pendingLoads[path] = (async () => {
+        const resp = await fetch(path);
+        const blob = await resp.blob();
+        const bitmap = await createImageBitmap(blob, { imageOrientation: 'flipY' });
+        const texture = new THREE.CanvasTexture(bitmap);
+        texture.flipY = false;
+        texture.minFilter = THREE.NearestFilter;
+        texture.magFilter = THREE.NearestFilter;
+        texture.generateMipmaps = false;
+        textureCache[path] = texture;
+        delete pendingLoads[path];
+        const base = path.replace(/_lod\d/, '');
+        if (!lodAvailable[base]) lodAvailable[base] = {};
+        const lodMatch = path.match(/_lod(\d)/);
+        if (lodMatch) lodAvailable[base][parseInt(lodMatch[1])] = path;
+        if (lodMatch && lodMatch[1] === '0') progress.ss++;
+        updateLoader();
+        return texture;
+    })();
     return pendingLoads[path];
 }
 
-function getStackMaterial(texturePath, stackName) {
-    const key = `${texturePath}::${stackName}`;
+function getBestLod(ssArray, maxLod) {
+    const base = ssArray[0].replace(/_lod\d/, '');
+    const avail = lodAvailable[base] || {};
+    for (let l = maxLod; l < LOD_COUNT; l++) {
+        if (avail[l] && textureCache[avail[l]]) return textureCache[avail[l]];
+    }
+    for (let l = maxLod - 1; l >= 0; l--) {
+        if (avail[l] && textureCache[avail[l]]) return textureCache[avail[l]];
+    }
+    return null;
+}
+
+function getStackMaterial(ssArray, stackName) {
+    const key = `${ssBase(ssArray)}::${stackName}`;
     if (!stackMaterialCache[key]) {
+        const tex = getBestLod(ssArray, LOD_COUNT - 1) || textureCache[ssArray[LOD_COUNT - 1]];
         stackMaterialCache[key] = new THREE.MeshBasicMaterial({
-            map: textureCache[texturePath],
+            map: tex,
             side: THREE.DoubleSide,
             transparent: true,
             alphaTest: 0.1,
             opacity: 1
         });
+        stackMaterialCache[key]._ssArray = ssArray;
     }
     return stackMaterialCache[key];
 }
@@ -477,6 +528,12 @@ window.addEventListener('hashchange', () => {
     if (node) renderContent(node);
 });
 
+document.addEventListener('mousemove', (e) => {
+    window._lastEdgeNavX = e.clientX;
+    window._lastEdgeNavY = e.clientY;
+});
+
+
 function precomputeCounts(node) {
     let count = 0;
     if (node.children) {
@@ -497,10 +554,7 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {
     link.className = 'tree-link';
     
     const hasChildren = node.children && node.children.length > 0;
-    const saDot = node.sa ? ' <span style="color:#4f4;font-size:7px;vertical-align:middle;">●</span>' : '';
-    const naDot = node.na ? ' <span style="color:#44f;font-size:7px;vertical-align:middle;">●</span>'  : '';
-    const htmlDots = node.at && node.at.length > 0 ? ' ' + buildHtmlDots(node.at, 7) : '';
-    const countLabel = node._dc > 0 ? ` <span class="tree-count" style="color:white">(${node._dc})</span>` : '';
+    const deco = navDeco(node, 'dot-sm');
 
     if (hasChildren) {
         const caret = document.createElement('span');
@@ -518,7 +572,7 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'tree-name';
-    nameSpan.innerHTML = node.name + naDot + saDot + htmlDots + countLabel;
+    nameSpan.innerHTML = node.name + deco;
     link.appendChild(nameSpan);
     link.dataset.path = node.path;
     if (node.sk && node.sk.length) link.dataset.keywords = node.sk.join(',').toLowerCase();
@@ -601,7 +655,6 @@ function disposeScene(sceneData) {
         sceneData.countDiv.parentNode.removeChild(sceneData.countDiv);
     }
     if (sceneData.renderer) {
-        sceneData.renderer.forceContextLoss();
         sceneData.renderer.dispose();
         if (sceneData.renderer.domElement.parentNode) {
             sceneData.renderer.domElement.parentNode.removeChild(sceneData.renderer.domElement);
@@ -639,9 +692,12 @@ async function createThreeScene(container, images, node) {
    
     progress.imgsTotal += images.length;
     progress.stacksTotal += folders.length;
-    const uniqueSS = new Set(images.map(i => i.ss));
-    progress.ssTotal += uniqueSS.size;
-    uniqueSS.forEach(ss => { if (textureCache[ss]) progress.ss++; });
+    const uniqueSS = new Set();
+    images.forEach(i => i.ss.forEach(p => uniqueSS.add(p)));
+    const uniqueSSBase = new Set();
+    images.forEach(i => { if (i.ss[0]) uniqueSSBase.add(i.ss[0]); });
+    progress.ssTotal += uniqueSSBase.size;
+    uniqueSSBase.forEach(ss => { if (textureCache[ss]) progress.ss++; });
     updateLoader();
  
     const baseGeometry = new THREE.PlaneGeometry(1, 1);
@@ -845,7 +901,7 @@ async function createThreeScene(container, images, node) {
     navButtons.style.cssText = 'position:absolute;top:5px;right:5px;display:flex;gap:5px;z-index:100';
     const createButton = () => {
         const btn = document.createElement('button');
-        btn.style.cssText = 'color:#fff;border:none;padding:3px;cursor:pointer;border-radius:50%';
+        btn.style.cssText = 'color:#fff;border:none;padding:0.3em;cursor:pointer;border-radius:50%;font-size:var(--font-ui, 11px)';
         return btn;
     };
     const topBtn = createButton(); const rightBtn = createButton();
@@ -878,7 +934,7 @@ async function createThreeScene(container, images, node) {
 
  
     const toggleBtn = document.createElement('button');
-    toggleBtn.style.cssText = 'position:absolute;bottom:5px;left:5px;background:#44f;border:none;width:8px;height:8px;border-radius:50%;cursor:pointer;padding:0;z-index:100';
+    toggleBtn.style.cssText = 'position:absolute;bottom:5px;left:5px;background:#44f;border:none;width:0.7em;height:0.7em;border-radius:50%;cursor:pointer;padding:0;z-index:100;font-size:var(--font-ui, 11px)';
     let labelsVisible = true;
     toggleBtn.onclick = () => {
         labelsVisible = !labelsVisible;
@@ -888,7 +944,7 @@ async function createThreeScene(container, images, node) {
     container.appendChild(toggleBtn);
 
     const countDiv = document.createElement('div');
-    countDiv.style.cssText = 'position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;font-size:11px;';
+    countDiv.style.cssText = 'position:absolute;bottom:5px;right:5px;color:white;font-family:monospace;';
     container.appendChild(countDiv);
 
     let loadedStacks = 0;
@@ -941,12 +997,14 @@ async function createThreeScene(container, images, node) {
     }
 
     const loadingPromise = (async () => {
-        const allSpritesheets = new Set();
+        const allSSArrays = new Set();
         folders.forEach(folder => {
-            grouped[folder].forEach(img => allSpritesheets.add(img.ss));
+            grouped[folder].forEach(img => allSSArrays.add(JSON.stringify(img.ss)));
         });
+        const uniqueSSArrays = [...allSSArrays].map(s => JSON.parse(s));
         
-        await Promise.all([...allSpritesheets].map(ss => loadSpritesheet(ss)));
+        const lod2Paths = uniqueSSArrays.map(ss => ss[LOD_COUNT - 1]);
+        await Promise.all(lod2Paths.map(p => loadSpritesheet(p)));
         
         const groupLabelData = {};
         for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {
@@ -1015,7 +1073,8 @@ async function createThreeScene(container, images, node) {
                     };
                     animObjects.push(mesh);
                 } else {
-                    if (!mergeBuckets[imgData.ss]) mergeBuckets[imgData.ss] = [];
+                    const bKey = ssBase(imgData.ss);
+                    if (!mergeBuckets[bKey]) mergeBuckets[bKey] = { geoms: [], ssArray: imgData.ss };
                     
                     const geometry = baseGeometry.clone();
                     geometry.applyMatrix4(matrix);
@@ -1034,19 +1093,19 @@ async function createThreeScene(container, images, node) {
                     uvs.setXY(2, u_start, v_start);
                     uvs.setXY(3, u_end, v_start);
                     
-                    mergeBuckets[imgData.ss].push(geometry);
+                    mergeBuckets[bKey].geoms.push(geometry);
                 }
                 loadedImages++;
                 progress.imgs++;
             }
 
-            for (const [ss, geoms] of Object.entries(mergeBuckets)) {
-                if (geoms.length > 0) {
-                    const mergedGeo = BufferGeometryUtils.mergeBufferGeometries(geoms);
-                    const mat = getStackMaterial(ss, folderName);
+            for (const [bKey, bucket] of Object.entries(mergeBuckets)) {
+                if (bucket.geoms.length > 0) {
+                    const mergedGeo = BufferGeometryUtils.mergeBufferGeometries(bucket.geoms);
+                    const mat = getStackMaterial(bucket.ssArray, folderName);
                     const mesh = new THREE.Mesh(mergedGeo, mat);
                     stackGroup.add(mesh);
-                    geoms.forEach(g => g.dispose());
+                    bucket.geoms.forEach(g => g.dispose());
                 }
             }
             animObjects.forEach(obj => stackGroup.add(obj));
@@ -1101,12 +1160,7 @@ async function createThreeScene(container, images, node) {
         }
 
         function nodeDeco(n) {
-            let d = '';
-            if (n.na) d += ' <span style="color:#44f;font-size:7px;vertical-align:middle">●</span>';
-            if (n.sa) d += ' <span style="color:#4f4;font-size:7px;vertical-align:middle">●</span>';
-            if (n.at && n.at.length > 0) d += ' ' + buildHtmlDots(n.at, 7);
-            if (n._dc > 0) d += `<span class="nav-count">(${n._dc})</span>`;
-            return d;
+            return spriteConfig.show_nav_accessories ? navDeco(n, 'dot-sm') : '';
         }
 
         function menuItem(name, path, color, deco, hasKids, subHtml, extraClass, extraStyle) {
@@ -1168,7 +1222,7 @@ async function createThreeScene(container, images, node) {
                 const color = activePath === child.path ? '#44f' : 'white';
                 const dNode = findNodeByPath(dataTree, child.path);
                 let deco = dNode ? nodeDeco(dNode) : '';
-                if (!hasKids && child.imageCount) deco += `<span class="nav-count">(${child.imageCount})</span>`;
+                if (spriteConfig.show_nav_accessories && !hasKids && child.imageCount) deco += `<span class="nav-count">(${child.imageCount})</span>`;
                 const subPos = depth === 0 ? 'right:0;bottom:100%' : 'left:100%;bottom:0';
                 const sub = hasKids ? { pos: subPos, content: renderMenuLevel(child, activePath, depth + 1) } : null;
                 const style = depth === 0 ? 'display:inline-block;vertical-align:top' : '';
@@ -1191,7 +1245,7 @@ async function createThreeScene(container, images, node) {
                 navHtml += `<span class="bc-expand bc-left"><span class="bc-arrow">&lt;</span><span class="bc-crumbs">${ancestorMenuHtml}</span></span>`;
             }
             navHtml += `<span style="padding:2px 4px;cursor:pointer" data-path="${scenePath}">${groupKey}</span>`;
-            navHtml += `<span class="nav-count">(${totalImages})</span>`;
+            if (spriteConfig.show_nav_accessories) navHtml += `<span class="nav-count">(${totalImages})</span>`;
 
             const menuTree = buildMenuTree(gData.folders, scenePath, groupKey);
             const menuHtml = renderMenuLevel(menuTree, activePath);
@@ -1209,7 +1263,7 @@ async function createThreeScene(container, images, node) {
             function hoverPair(trigger, target, showVal) {
                 let t = null;
                 const show = () => { clearTimeout(t); if (showVal === 'visible') { target.style.visibility = 'visible'; target.style.pointerEvents = 'auto'; } else target.style.display = showVal; };
-                const hide = () => { t = setTimeout(() => { if (showVal === 'visible') { target.style.visibility = 'hidden'; target.style.pointerEvents = 'none'; } else target.style.display = 'none'; }, 150); };
+                const hide = () => { t = setTimeout(() => { if (showVal === 'visible') { target.style.visibility = 'hidden'; target.style.pointerEvents = 'none'; } else target.style.display = 'none'; }, spriteConfig.submenu_close_delay); };
                 trigger.addEventListener('mouseenter', show);
                 trigger.addEventListener('mouseleave', hide);
                 target.addEventListener('mouseenter', show);
@@ -1287,6 +1341,22 @@ async function createThreeScene(container, images, node) {
         }
     })();
 
+    const bgLodPromise = loadingPromise.then(async () => {
+        const allSSArrays = new Set();
+        folders.forEach(folder => {
+            grouped[folder].forEach(img => allSSArrays.add(JSON.stringify(img.ss)));
+        });
+        const uniqueSSArrays = [...allSSArrays].map(s => JSON.parse(s));
+        const waitFrame = () => new Promise(r => requestAnimationFrame(r));
+        for (let lod = LOD_COUNT - 2; lod >= 0; lod--) {
+            const paths = uniqueSSArrays.map(ss => ss[lod]);
+            for (const p of paths) {
+                await loadSpritesheet(p);
+                await waitFrame();
+            }
+        }
+    });
+
     // const stats = new Stats();
     // stats.showPanel(0);
     // container.appendChild(stats.dom);
@@ -1315,22 +1385,45 @@ async function createThreeScene(container, images, node) {
 
     const MAX_LABELS =  spriteConfig.max_labels;
     const SCREEN_BUFFER = spriteConfig.screen_buffer;
+    const _labelVec = new THREE.Vector3();
+    const _worldBox = new THREE.Box3();
 
     function animate() {
-        // stats.begin();
         sceneData.animationId = requestAnimationFrame(animate);
         controls.update();
         const rotationAngle = Date.now() * ROTATION_SPEED;
         scene.rotation.y = rotationAngle;
         
-        // Frustum culling for stacks (every 5 frames)
         if (frameCount % 5 === 0) {
             camera.updateMatrixWorld();
             cameraViewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
             frustum.setFromProjectionMatrix(cameraViewProjectionMatrix);
             for (const [folder, data] of Object.entries(stackGroups)) {
-                if (!data.boundingBox) data.boundingBox = new THREE.Box3().setFromObject(data.group);
-                data.group.visible = frustum.intersectsBox(data.boundingBox);
+                if (!data.localBox) {
+                    data.localBox = new THREE.Box3().setFromObject(data.group);
+                    data.group.updateMatrixWorld();
+                    data.localBox.applyMatrix4(data.group.matrixWorld.clone().invert());
+                }
+                _worldBox.copy(data.localBox).applyMatrix4(data.group.matrixWorld);
+                data.group.visible = frustum.intersectsBox(_worldBox);
+            }
+        }
+
+        if (frameCount % 15 === 0) {
+            const viewHeight = (camera.top - camera.bottom) / camera.zoom;
+            let targetLod;
+            if (viewHeight < 10) targetLod = 0;
+            else if (viewHeight < 40) targetLod = 1;
+            else targetLod = 2;
+
+            for (const key in stackMaterialCache) {
+                const mat = stackMaterialCache[key];
+                if (!mat._ssArray) continue;
+                const best = getBestLod(mat._ssArray, targetLod);
+                if (best && mat.map !== best) {
+                    mat.map = best;
+                    mat.needsUpdate = true;
+                }
             }
         }
         
@@ -1358,7 +1451,7 @@ async function createThreeScene(container, images, node) {
                 // Simple heuristic since we know camera is roughly at +Z
                 // But camera rotates. So we use projection.
                 
-                const vec = new THREE.Vector3(rX, lbl.position.y, rZ);
+                const vec = _labelVec.set(rX, lbl.position.y, rZ);
                 vec.project(camera);
                 
                 // vec.x and vec.y are now -1 to 1
@@ -1442,7 +1535,8 @@ async function renderContent(node) {
     updateTreeState(true);
     
     for (const key in stackMaterialCache) {
-        if (stackMaterialCache[key]) stackMaterialCache[key].opacity = 1.0;
+        if (stackMaterialCache[key]) stackMaterialCache[key].dispose();
+        delete stackMaterialCache[key];
     }
     
     activeScenes.forEach(disposeScene);
@@ -1465,21 +1559,7 @@ async function renderContent(node) {
 
         const label = document.createElement('div');
         label.className = 'div-label';
-        const pathParts = child.path.split('/');
-        label.innerHTML = pathParts.map((part, idx) => {
-    const partPath = pathParts.slice(0, idx + 1).join('/');
-    let color = 'white';
-    if (currentNode && partPath === currentNode.path) {
-        color = '#44f';
-    }
-            
-const pNode = findNodeByPath(dataTree, partPath);
-    const naDot = (pNode && pNode.na) ? '<span style="color:#44f;font-size:9px;vertical-align:middle;margin-left:1px;">●</span>' : '';
-    const saDot = (pNode && pNode.sa) ? '<span style="color:#4f4;font-size:9px;vertical-align:middle;margin-left:1px;">●</span>' : '';
-    const htmlDots = spriteConfig.breadcrumb_html_dots ? buildHtmlDots(pNode ? pNode.at : null, 9) : '';
-    
-    return `<span style="color:${color};cursor:pointer" data-path="${partPath}">${part}${naDot}${saDot}${htmlDots}</span>`;
-}).join(' <span style="color:white">&gt;</span> ');
+        label.innerHTML = breadcrumbHtml(child.path, currentNode ? currentNode.path : null);
             
         label.style.pointerEvents = 'auto';
         label.querySelectorAll('span[data-path]').forEach(span => {
@@ -1581,21 +1661,7 @@ scriptTags.forEach(oldScript => {
                 oldScript.parentNode.replaceChild(newScript, oldScript);
             });
             
-            const pathParts = child.path.split('/');
-            const labelHtml = pathParts.map((part, idx) => {
-                const partPath = pathParts.slice(0, idx + 1).join('/');
-                let color = 'white';
-                if (currentNode && partPath === currentNode.path) {
-                    color = '#44f';
-                }
-                
-                const pNode = findNodeByPath(dataTree, partPath);
-                const naDot = (pNode && pNode.na) ? '<span style="color:#44f;font-size:9px;vertical-align:middle;margin-left:1px;">●</span>' : '';
-                const saDot = (pNode && pNode.sa) ? '<span style="color:#4f4;font-size:9px;vertical-align:middle;margin-left:1px;">●</span>' : '';
-                const htmlDots = spriteConfig.breadcrumb_html_dots ? buildHtmlDots(pNode ? pNode.at : null, 9) : '';
-                
-                return `<span style="color:${color};cursor:pointer" data-path="${partPath}">${part}${naDot}${saDot}${htmlDots}</span>`;
-            }).join(' <span style="color:white">&gt;</span> ');
+            const labelHtml = breadcrumbHtml(child.path, currentNode ? currentNode.path : null);
             
             const labelDiv = document.createElement('div');
             labelDiv.className = 'div-label';
@@ -1612,8 +1678,68 @@ scriptTags.forEach(oldScript => {
             div.appendChild(textDiv);
             div.appendChild(labelDiv);
         }
+        const EDGE_ZONE = 35;
+        const TOP_DEADZONE = 40;
+        const BOTTOM_DEADZONE = 40;
+
+        const parentPath = currentNode ? currentNode.path.split('/').slice(0, -1).join('/') : null;
+        const hasParent = parentPath !== null && parentPath !== '';
+        const canGoDeeper = child !== node;
+        const isRoot = !hasParent;
+        const isLeaf = !canGoDeeper;
+
+        const leftBox = document.createElement('div');
+        leftBox.className = 'edge-nav-box edge-nav-left' + (isRoot ? ' edge-nav-end' : '');
+        div.appendChild(leftBox);
+        if (hasParent) {
+            leftBox.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const parentNode = findNodeByPath(dataTree, parentPath);
+                if (parentNode) renderContent(parentNode);
+            });
+        }
+
+        const rightBox = document.createElement('div');
+        rightBox.className = 'edge-nav-box edge-nav-right' + (isLeaf ? ' edge-nav-end' : '');
+        div.appendChild(rightBox);
+        if (canGoDeeper) {
+            rightBox.addEventListener('click', (e) => {
+                e.stopPropagation();
+                renderContent(child);
+            });
+        }
+
+        div.addEventListener('mousemove', (e) => {
+            const rect = div.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const h = rect.height;
+            const inDeadzone = y < TOP_DEADZONE || y > h - BOTTOM_DEADZONE;
+            if (!inDeadzone && x < EDGE_ZONE) {
+                leftBox.style.display = 'block';
+                leftBox.style.top = (y - 15) + 'px';
+            } else leftBox.style.display = 'none';
+            if (!inDeadzone && x > rect.width - EDGE_ZONE) {
+                rightBox.style.display = 'block';
+                rightBox.style.top = (y - 15) + 'px';
+            } else rightBox.style.display = 'none';
+        });
+        div.addEventListener('mouseleave', () => {
+            leftBox.style.display = 'none';
+            rightBox.style.display = 'none';
+        });
+
         contentDiv.appendChild(div);
     }
+
+    requestAnimationFrame(() => {
+        const el = document.elementFromPoint(window._lastEdgeNavX || 0, window._lastEdgeNavY || 0);
+        if (el) el.dispatchEvent(new MouseEvent('mousemove', {
+            clientX: window._lastEdgeNavX || 0,
+            clientY: window._lastEdgeNavY || 0,
+            bubbles: true
+        }));
+    });
 
     await new Promise(resolve => requestAnimationFrame(resolve));
     const sceneDivs = Array.from(contentDiv.children).filter(d => d._sceneContainer);

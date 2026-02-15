@@ -23,10 +23,7 @@ website + first projects processed and uploaded
 get a fucking job and apartment back in europm choose a place and try
 ---------
 
-
-
-
-
+annotations rendered per 2 frames? make every frame. too much jumping on fast navigation
 
 when the website isfinished, 
 wednseday, thursday, friday, saturday, sunday
@@ -38,19 +35,31 @@ apply to iaac, madrid, rmit, mit everywhere
 
 todo
 
-.custom_processing zoom factor set. not its random
+
+if mouse is close to div border. there should be a circle popping up that is either green or red. green is going forward , red is backweards in the tree.
+treeviewer should also reflect in the model, nothing is happening now, difficult to follow. perhaps same as submenu
+
+
+
+in a sdcreen with many dics with stacks, sometimes it wont load , unless 1 of them is being not loaded in
+sometimes, when a single stack in a div there is no lod process
+
+in submenus '>' goes just forward, it should be a stack if it has children.
+
+
+max webgl instances reached. give little loader button that loads in the other ones if webgl is full
+spitesheet on loading text is 3 times too less, becuase of the lod's.
 
 2d
 
+when on lowest level, pressing it will spawn all images of the stack?
 
 
+optimize the dam scene fully
 
 3d
-in 3d viewport, sometimes chunks are loaded oput too fast. perhaps thsis a zooming thing
-zooming factor should be set in .custom processing, + set in bottom right viewport
  for stacks there should be something else happening when highligting, perhaps a brief description of the project at annotation level? something exciting. 
 
-rotate camera instead of stacks. should give big performance boost
 
 
 cleanup dotfiles , only 1 custom processing and grid_layout, 
@@ -101,6 +110,24 @@ make examples and documentation with different states
 
 
 in progress-------------------------
+
+remove the submenu child counter. too long filenames
+increase textfont everywhere 110% looks better
+
+in 3d viewport, sometimes chunks are loaded oput too fast. perhaps thsis a zooming thing
+
+rotate camera instead of stacks. should give big performance boost
+
+zooming factor should be set in .custom processing, + set in bottom right viewport
+
+texture load efficiency
+texture lod
+
+.custom_processing zoom factor set. not its random
+
+
+
+
 
 when highlighting an object in 3d viewport, it sometimes clicks the wrong ones too. +
 

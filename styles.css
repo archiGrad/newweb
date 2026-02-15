@@ -1,3 +1,42 @@
+
+/* Override these to change font sizes without re-running the Python script */
+:root {
+    --font-ui: 14px;
+    --font-dots-sm: 14px;
+    --font-dots-md: 14px;
+    --font-page-index: 14px;
+    --font-loading-grid: 14px;
+}
+
+
+
+
+.edge-nav-box {
+    display: none;
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    z-index: 100;
+    pointer-events: auto;
+    cursor: pointer;
+}
+.edge-nav-left {
+    left: 0;
+    background: #e33;
+}
+.edge-nav-right {
+    right: 0;
+    background: #3b3;
+}
+.edge-nav-end {
+    background: #44f;
+    cursor: default;
+}
+
+
+
+
+
 /* STYLING CONTENT */
 
 
@@ -24,6 +63,7 @@
 
 
 .text_center_fullscreen {
+    font-size: 12px;
  display: flex;
     justify-content: center;
     align-items: center;
