@@ -90,6 +90,7 @@ body {
     height: 100%;
     pointer-events: none;
     overflow: hidden;
+    z-index: 10;
 }
 .stack-label {
     position: absolute;
@@ -103,45 +104,22 @@ body {
     font-size: var(--font-ui, 11px);
     user-select: none;
     background: black;
+    border-radius: 4px;
     line-height: 1.6;
     white-space: nowrap;
 }
 .stack-label span { pointer-events: auto; }
-.stack-label .cascade-item { padding: 0 4px; position: relative; }
-.stack-label .cascade-sub {
-    display: none;
-    position: absolute;
-    background: black;
-    pointer-events: auto;
-    z-index: 1001;
-    min-width: max-content;
-}
-.stack-label .bc-expand { display: inline-block; position: relative; }
-.stack-label .bc-arrow { padding: 2px 4px; cursor: pointer; color: white; }
-.stack-label .bc-crumbs { display: none; position: absolute; background: black; z-index: 1000; }
-.stack-label .bc-left .bc-crumbs { right: 100%; top: 0; }
-.stack-label .bc-right { vertical-align: top; }
-.stack-label .bc-right .bc-crumbs { left: 100%; top: 0; min-width: max-content; }
-.stack-label .ancestor-level { display: inline-block; position: relative; vertical-align: top; }
-.stack-label .ancestor-parent {
-    visibility: hidden;
-    pointer-events: none;
-    position: absolute;
-    right: 100%;
-    top: 0;
-    background: black;
-}
-.stack-label .ancestor-chain-item { display: inline-block; position: relative; vertical-align: top; }
-.stack-label .cascade-item:hover > span[data-path],
-.stack-label .bc-arrow:hover,
-.stack-label .ancestor-chain-item:hover > span[data-path],
-.stack-label > span[data-path]:hover {
-    background: #222;
-}
-.stack-label .nav-arrow { color: white; margin-left: 2px; }
+.stack-label > span[data-path]:hover { background: #222; }
 .stack-label .nav-deco { color: #666; font-size: var(--font-dots-md, 9px); }
-.stack-label .nav-sep { color: white; }
 .stack-label .nav-count { color: white; margin-left: 2px; }
+.nav-ancestor-label { opacity: 0.7; }
+.nav-wire-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9; shape-rendering: crispEdges; }
+.nav-wire-svg path { fill: none; stroke: white; stroke-width: 1; }
+.nav-wire-svg .nav-wire-path { stroke-width: 5; }
+.nav-wire-svg .nav-wire-path-ancestor { stroke: rgba(255,255,255,0.5); stroke-width: 5; }
+.nav-wire-svg .nav-wire-path-dim { stroke: rgba(255,255,255,0.2); }
+.wire-arrow line { stroke: white; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+.wire-arrow-dim line { stroke: rgba(255,255,255,0.3); stroke-width: 1; }
 .dot-sm { font-size: var(--font-dots-sm, 7px); }
 .dot-md { font-size: var(--font-dots-md, 9px); }
 canvas { display: block; width: 100%; height: 100%; }
@@ -716,16 +694,15 @@ async function createThreeScene(container, images, node) {
         gridGroups = [];
         const processedFolders = new Set();
         function collectGridChildren(n) {
-            if (n.hid) return; 
-            if (n.grid_layout && n.ai.length > 0) {
-                const childFolders = folders.filter(f => f.startsWith(n.path + '/') || f === n.path);
+            if (n.hid) return;
+            const childFolders = folders.filter(f => f.startsWith(n.path + '/') || f === n.path);
+            if (n.grid_layout && n.ai.length > 0 && childFolders.length > 0) {
                 const [gCols, gRows] = ORDERED_GRID_LAYOUT ? n.grid_layout.split('x').map(Number) : [1, 1];
                 gridGroups.push({ folders: childFolders, cols: gCols, rows: gRows, path: n.path });
                 childFolders.forEach(f => processedFolders.add(f));
             } else if (n.children.length > 0) {
                 n.children.forEach(child => collectGridChildren(child));
-            } else if (n.ai.length > 0) {
-                const childFolders = folders.filter(f => f.startsWith(n.path + '/') || f === n.path);
+            } else if (childFolders.length > 0) {
                 gridGroups.push({ folders: childFolders, cols: 1, rows: 1, path: n.path });
                 childFolders.forEach(f => processedFolders.add(f));
             }
@@ -831,6 +808,16 @@ async function createThreeScene(container, images, node) {
         });
     }
 
+    folders.forEach((folder, stackIdx) => {
+        if (folderPositions[folder]) return;
+        const col = stackIdx % (cols || 1);
+        const row = Math.floor(stackIdx / (cols || 1));
+        const x = col * spacing - (offsetX || 0);
+        const z = row * spacing - (offsetZ || 0);
+        folderPositions[folder] = {x, z};
+        calculateBounds(x, z);
+    });
+
     const meshMaxSize = 1.5 * 1.5;
     const geomWidth = maxX - minX + meshMaxSize;
     const geomDepth = maxZ - minZ + meshMaxSize;
@@ -932,6 +919,27 @@ async function createThreeScene(container, images, node) {
     labelContainer.id = 'label-container';
     container.appendChild(labelContainer);
 
+    const wireSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    wireSvg.classList.add('nav-wire-svg');
+    wireSvg.setAttribute('width', '100%');
+    wireSvg.setAttribute('height', '100%');
+    wireSvg.style.overflow = 'visible';
+    container.appendChild(wireSvg);
+    function makeSvgPath(cls) { const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.classList.add(cls); wireSvg.appendChild(p); return p; }
+    const wirePathDim = makeSvgPath('nav-wire-path-dim');
+    const wirePathAncestor = makeSvgPath('nav-wire-path-ancestor');
+    const wirePath = makeSvgPath('nav-wire-path');
+    const wireArrowG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    wireSvg.appendChild(wireArrowG);
+    let mouseX = 0, mouseY = 0, mouseIsDown = false;
+    document.addEventListener('pointerdown', (e) => { if (e.button === 0 || e.button === 1) mouseIsDown = true; });
+    document.addEventListener('pointerup', (e) => { if (e.button === 0 || e.button === 1) mouseIsDown = false; });
+    container.addEventListener('mousemove', (e) => {
+        const rect = container.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
+    });
+
  
     const toggleBtn = document.createElement('button');
     toggleBtn.style.cssText = 'position:absolute;bottom:5px;left:5px;background:#44f;border:none;width:0.7em;height:0.7em;border-radius:50%;cursor:pointer;padding:0;z-index:100;font-size:var(--font-ui, 11px)';
@@ -939,6 +947,7 @@ async function createThreeScene(container, images, node) {
     toggleBtn.onclick = () => {
         labelsVisible = !labelsVisible;
         labelContainer.style.display = labelsVisible ? 'block' : 'none';
+        wireSvg.style.display = labelsVisible ? '' : 'none';
         toggleBtn.style.background = labelsVisible ? '#44f' : '#f44';
     };
     container.appendChild(toggleBtn);
@@ -972,6 +981,8 @@ async function createThreeScene(container, images, node) {
 
     const stackLabels = [];
     let currentFocusedParent = null;
+    let activeLabelPath = null;
+    let activeGroupPath = null;
     function focusStackGroup(parentFolder) {
         if (currentFocusedParent === parentFolder) {
             unfocusAll();
@@ -1136,208 +1147,168 @@ async function createThreeScene(container, images, node) {
                 groupLabelData[groupKey].xPos = xPos;
                 groupLabelData[groupKey].zPos = zPos;
             }
-            groupLabelData[groupKey].folders.push({ folderName, relPath, imageCount: stackImages.length });
+            groupLabelData[groupKey].folders.push({ folderName, relPath, imageCount: stackImages.length, xPos, zPos, topY });
         }
 
-        // Build tree from flat folder list for cascading menu
-        function buildMenuTree(folders, scenePath, groupKey) {
-            const root = { children: {}, path: scenePath + '/' + groupKey };
-            for (const f of folders) {
-                const parts = f.relPath.split('/').filter(p => p);
-                const subParts = parts.slice(1);
-                let cur = root;
-                let curPath = scenePath + '/' + groupKey;
-                for (let i = 0; i < subParts.length; i++) {
-                    curPath = curPath + '/' + subParts[i];
-                    if (!cur.children[subParts[i]]) {
-                        cur.children[subParts[i]] = { children: {}, path: curPath, imageCount: 0 };
-                    }
-                    cur = cur.children[subParts[i]];
-                }
-                cur.imageCount = f.imageCount;
+        // Create spatial labels from recursive tree
+        const scenePath = node.path || '';
+        let hoverDimTimeout = null;
+
+        function applyDimming(targetPath) {
+            for (const [folder, data] of Object.entries(stackGroups)) {
+                const isMatch = folder.startsWith(targetPath + '/') || folder === targetPath;
+                const isAncestor = targetPath.startsWith(folder + '/');
+                const op = (isMatch || isAncestor) ? 1.0 : STACK_DIM_OPACITY;
+                data.materials.forEach(m => m.opacity = op);
             }
+            stackLabels.forEach(sl => {
+                const isMatch = sl.folderName.startsWith(targetPath + '/') || sl.folderName === targetPath;
+                const isAncestor = targetPath.startsWith(sl.folderName + '/');
+                sl.element.style.opacity = (isMatch || isAncestor) ? '1.0' : String(STACK_DIM_OPACITY);
+            });
+        }
+
+        function clearDimming() {
+            for (const data of Object.values(stackGroups)) data.materials.forEach(m => m.opacity = 1.0);
+            stackLabels.forEach(sl => sl.element.style.opacity = '1.0');
+        }
+
+        function setNavVisible(parentPath) {
+            activeLabelPath = parentPath;
+            stackLabels.forEach(sl => {
+                if (sl.isGroup) return;
+                const isDirectChild = sl.navParentPath === parentPath;
+                const isAncestorChild = parentPath.startsWith(sl.navParentPath + '/');
+                sl.navVisible = isDirectChild || isAncestorChild;
+            });
+        }
+
+        function clearNav() {
+            activeLabelPath = null;
+            activeGroupPath = null;
+            stackLabels.forEach(sl => {
+                if (!sl.isGroup) sl.navVisible = false;
+            });
+        }
+
+        // Build a position tree from flat folder list per group
+        function buildPositionTree(folders, basePath) {
+            const root = { children: {}, path: basePath, maxY: 0, xPos: 0, zPos: 0 };
+            for (const f of folders) {
+                const sub = f.relPath.split('/').filter(p => p).slice(1);
+                let cur = root;
+                let curPath = basePath;
+                for (let i = 0; i < sub.length; i++) {
+                    curPath = curPath + '/' + sub[i];
+                    if (!cur.children[sub[i]]) {
+                        cur.children[sub[i]] = { children: {}, path: curPath, maxY: 0, xPos: f.xPos, zPos: f.zPos };
+                    }
+                    cur = cur.children[sub[i]];
+                }
+                if (f.topY > cur.maxY) {
+                    cur.maxY = f.topY;
+                    cur.xPos = f.xPos;
+                    cur.zPos = f.zPos;
+                }
+            }
+            function propagate(n) {
+                for (const child of Object.values(n.children)) {
+                    propagate(child);
+                    if (child.maxY > n.maxY) {
+                        n.maxY = child.maxY;
+                        n.xPos = child.xPos;
+                        n.zPos = child.zPos;
+                    }
+                }
+            }
+            propagate(root);
             return root;
         }
 
-        function nodeDeco(n) {
-            return spriteConfig.show_nav_accessories ? navDeco(n, 'dot-sm') : '';
-        }
+        function createLabel(name, path, worldPos, isGroup, navParentPath, rootGroupPath) {
+            const el = document.createElement('span');
+            el.className = 'stack-label' + (isGroup ? '' : ' nav-child-label');
+            el.dataset.folderName = path;
+            el.innerHTML = `<span style="padding:2px 4px;cursor:pointer" data-path="${path}">${name}</span>`;
+            el.addEventListener('wheel', (e) => { e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }, { passive: false });
+            labelContainer.appendChild(el);
 
-        function menuItem(name, path, color, deco, hasKids, subHtml, extraClass, extraStyle) {
-            let h = `<span style="cursor:pointer;color:${color}" data-path="${path}">${name}</span>${deco}`;
-            if (hasKids) {
-                h += `<span class="nav-arrow">&gt;</span>`;
-                h += `<div class="cascade-sub" style="${subHtml.pos}">${subHtml.content}</div>`;
-            }
-            const cls = 'cascade-item' + (extraClass ? ' ' + extraClass : '');
-            return `<div class="${cls}"${extraStyle ? ' style="' + extraStyle + '"' : ''}>${h}</div>`;
-        }
+            const entry = { element: el, position: worldPos, xPos: worldPos.x, zPos: worldPos.z, folderName: path, isGroup, isAncestor: false, navParentPath, navVisible: false };
+            stackLabels.push(entry);
 
-        function renderChildren(children, activePath, subPos) {
-            let h = '';
-            for (const c of (children || [])) {
-                if (c.hid) continue;
-                const color = activePath === c.path ? '#44f' : 'white';
-                const hasKids = c.children && c.children.length > 0;
-                const sub = hasKids ? { pos: subPos, content: renderChildren(c.children, activePath, subPos) } : null;
-                h += menuItem(c.name, c.path, color, nodeDeco(c), hasKids, sub, '', '');
-            }
-            return h;
-        }
-
-        function buildAncestorMenu(dataTree, scenePath, activePath) {
-            const parts = scenePath ? scenePath.split('/') : [];
-            if (parts.length === 0) return '';
-            const ancestors = [];
-            for (let i = 0; i < parts.length; i++) {
-                const aNode = findNodeByPath(dataTree, parts.slice(0, i + 1).join('/'));
-                if (aNode) ancestors.push(aNode);
-            }
-            if (ancestors.length === 0) return '';
-
-            function renderLevel(idx) {
-                const a = ancestors[idx];
-                const color = activePath === a.path ? '#44f' : 'white';
-                let childrenHtml = '';
-                if (a.children && a.children.length > 0) {
-                    childrenHtml = `<div class="cascade-sub" style="left:0;top:100%">${renderChildren(a.children, activePath, 'left:100%;top:0')}</div>`;
-                }
-                let html = `<div class="cascade-item ancestor-chain-item"><span style="padding:2px 4px;cursor:pointer;color:${color}" data-path="${a.path}">${a.name}</span>${nodeDeco(a)}${childrenHtml}</div>`;
-                if (idx > 0) {
-                    html = `<div class="ancestor-level"><span class="ancestor-parent">${renderLevel(idx - 1)}<span class="nav-sep">&gt;</span></span>${html}</div>`;
-                }
-                return html;
-            }
-            return renderLevel(ancestors.length - 1);
-        }
-
-        function renderMenuLevel(treeNode, activePath, depth) {
-            depth = depth || 0;
-            const keys = Object.keys(treeNode.children);
-            if (keys.length === 0) return '';
-            let html = '';
-            for (const key of keys) {
-                const child = treeNode.children[key];
-                const hasKids = Object.keys(child.children).length > 0;
-                const color = activePath === child.path ? '#44f' : 'white';
-                const dNode = findNodeByPath(dataTree, child.path);
-                let deco = dNode ? nodeDeco(dNode) : '';
-                if (spriteConfig.show_nav_accessories && !hasKids && child.imageCount) deco += `<span class="nav-count">(${child.imageCount})</span>`;
-                const subPos = depth === 0 ? 'right:0;bottom:100%' : 'left:100%;bottom:0';
-                const sub = hasKids ? { pos: subPos, content: renderMenuLevel(child, activePath, depth + 1) } : null;
-                const style = depth === 0 ? 'display:inline-block;vertical-align:top' : '';
-                html += menuItem(key, child.path, color, deco, hasKids, sub, '', style);
-            }
-            return html;
-        }
-
-        // Create one label per group
-        const scenePath = node.path || '';
-        const activePath = currentNode ? currentNode.path : '';
-        const ancestorMenuHtml = buildAncestorMenu(dataTree, scenePath, activePath);
-        for (const [groupKey, gData] of Object.entries(groupLabelData)) {
-            const worldPos = new THREE.Vector3(gData.xPos, gData.maxY, gData.zPos);
-            const label = document.createElement('span');
-            let navHtml = '';
-            const totalImages = gData.folders.reduce((s, f) => s + f.imageCount, 0);
-
-            if (ancestorMenuHtml) {
-                navHtml += `<span class="bc-expand bc-left"><span class="bc-arrow">&lt;</span><span class="bc-crumbs">${ancestorMenuHtml}</span></span>`;
-            }
-            navHtml += `<span style="padding:2px 4px;cursor:pointer" data-path="${scenePath}">${groupKey}</span>`;
-            if (spriteConfig.show_nav_accessories) navHtml += `<span class="nav-count">(${totalImages})</span>`;
-
-            const menuTree = buildMenuTree(gData.folders, scenePath, groupKey);
-            const menuHtml = renderMenuLevel(menuTree, activePath);
-            if (menuHtml) {
-                navHtml += `<span class="bc-expand bc-right"><span class="bc-arrow">&gt;</span><span class="bc-crumbs">${menuHtml}</span></span>`;
-            }
-
-            label.innerHTML = navHtml;
-            label.className = 'stack-label';
-            label.addEventListener('wheel', (e) => { e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }, { passive: false });
-            labelContainer.appendChild(label);
-            stackLabels.push({ element: label, position: worldPos, xPos: gData.xPos, zPos: gData.zPos, folderName: scenePath + '/' + groupKey });
-
-            // Hover helper: show/hide element pair with timeout
-            function hoverPair(trigger, target, showVal) {
-                let t = null;
-                const show = () => { clearTimeout(t); if (showVal === 'visible') { target.style.visibility = 'visible'; target.style.pointerEvents = 'auto'; } else target.style.display = showVal; };
-                const hide = () => { t = setTimeout(() => { if (showVal === 'visible') { target.style.visibility = 'hidden'; target.style.pointerEvents = 'none'; } else target.style.display = 'none'; }, spriteConfig.submenu_close_delay); };
-                trigger.addEventListener('mouseenter', show);
-                trigger.addEventListener('mouseleave', hide);
-                target.addEventListener('mouseenter', show);
-                target.addEventListener('mouseleave', hide);
-            }
-
-            label.querySelectorAll('.bc-expand').forEach(bc => {
-                const mode = bc.classList.contains('bc-left') ? 'inline-block' : 'block';
-                hoverPair(bc.querySelector('.bc-arrow'), bc.querySelector('.bc-crumbs'), mode);
-            });
-
-            label.querySelectorAll('.ancestor-chain-item').forEach(item => {
-                const level = item.parentElement;
-                if (!level || !level.classList.contains('ancestor-level')) return;
-                const ap = level.querySelector(':scope > .ancestor-parent');
-                if (ap) hoverPair(item, ap, 'visible');
-            });
-
-            label.querySelectorAll('.cascade-item').forEach(item => {
-                const sub = item.querySelector('.cascade-sub');
-                if (sub) hoverPair(item, sub, 'block');
-            });
-
-            // Click logic
-            label.querySelectorAll('span[data-path]').forEach(span => {
-                span.onclick = (e) => {
-                    e.stopPropagation();
-                    const clickedPath = span.dataset.path;
-                    const clickedNode = findNodeByPath(dataTree, clickedPath);
-                    if (clickedNode && clickedNode.path === node.path) {
-                        const groupPath = scenePath ? scenePath + '/' + groupKey : groupKey;
-                        focusStackGroup(groupPath);
-                    } else if (clickedNode) renderContent(clickedNode);
-                };
-            });
-
-            let hoverDimTimeout = null;
-            label.addEventListener('mouseenter', () => {
+            el.addEventListener('mouseenter', () => {
                 clearTimeout(hoverDimTimeout);
-                if (currentFocusedParent) return;
-                const groupPath = scenePath ? scenePath + '/' + groupKey : groupKey;
-                for (const [folder, data] of Object.entries(stackGroups)) {
-                    const op = (folder.startsWith(groupPath + '/') || folder === groupPath) ? 1.0 : STACK_DIM_OPACITY;
-                    data.materials.forEach(m => m.opacity = op);
-                }
-                stackLabels.forEach(sl => {
-                    const match = sl.folderName.startsWith(groupPath + '/') || sl.folderName === groupPath;
-                    sl.element.style.opacity = match ? '1.0' : String(STACK_DIM_OPACITY);
-                });
+                if (currentFocusedParent || mouseIsDown) return;
+                activeGroupPath = rootGroupPath;
+                setNavVisible(path);
+                applyDimming(path);
             });
-            label.addEventListener('mouseleave', () => {
+            el.addEventListener('mouseleave', () => {
                 hoverDimTimeout = setTimeout(() => {
                     if (currentFocusedParent) return;
-                    for (const data of Object.values(stackGroups)) data.materials.forEach(m => m.opacity = 1.0);
-                    stackLabels.forEach(sl => sl.element.style.opacity = '1.0');
-                }, 150);
+                    if (activeGroupPath === rootGroupPath) return;
+                    clearNav();
+                    clearDimming();
+                }, spriteConfig.submenu_close_delay);
             });
 
-            label.querySelectorAll('.cascade-item span[data-path], .ancestor-chain-item span[data-path]').forEach(span => {
-                span.addEventListener('mouseenter', () => {
+            el.querySelector('span[data-path]').onclick = (e) => {
+                e.stopPropagation();
+                const clickedNode = findNodeByPath(dataTree, path);
+                if (clickedNode && clickedNode.path === node.path) focusStackGroup(path);
+                else if (clickedNode) renderContent(clickedNode);
+            };
+
+            return entry;
+        }
+
+        function createChildLabels(treeNode, parentPath, rootGroupPath) {
+            for (const [name, child] of Object.entries(treeNode.children)) {
+                const wp = new THREE.Vector3(child.xPos, child.maxY, child.zPos);
+                createLabel(name, child.path, wp, false, parentPath, rootGroupPath);
+                if (Object.keys(child.children).length > 0) {
+                    createChildLabels(child, child.path, rootGroupPath);
+                }
+            }
+        }
+
+        for (const [groupKey, gData] of Object.entries(groupLabelData)) {
+            const groupPath = scenePath ? scenePath + '/' + groupKey : groupKey;
+            const worldPos = new THREE.Vector3(gData.xPos, gData.maxY, gData.zPos);
+            const entry = createLabel(groupKey, groupPath, worldPos, true, null, groupPath);
+
+            // Ancestor labels above group label
+            const ancestorParts = scenePath ? scenePath.split('/') : [];
+            for (let ai = 0; ai < ancestorParts.length; ai++) {
+                const aPath = ancestorParts.slice(0, ai + 1).join('/');
+                const aName = ancestorParts[ai];
+                const aEl = document.createElement('span');
+                aEl.className = 'stack-label nav-ancestor-label';
+                aEl.dataset.folderName = aPath;
+                aEl.innerHTML = `<span style="padding:2px 4px;cursor:pointer;color:#888" data-path="${aPath}">${aName}</span>`;
+                aEl.addEventListener('wheel', (e) => { e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }, { passive: false });
+                labelContainer.appendChild(aEl);
+                aEl.addEventListener('mouseenter', () => {
                     clearTimeout(hoverDimTimeout);
-                    if (currentFocusedParent) return;
-                    const hp = span.dataset.path;
-                    const groupPath = scenePath ? scenePath + '/' + groupKey : groupKey;
-                    for (const [folder, data] of Object.entries(stackGroups)) {
-                        const op = (folder.startsWith(hp + '/') || folder === hp) ? 1.0 : STACK_DIM_OPACITY;
-                        data.materials.forEach(m => m.opacity = op);
-                    }
-                    stackLabels.forEach(sl => {
-                        const match = sl.folderName.startsWith(hp + '/') || sl.folderName === hp || sl.element === label;
-                        sl.element.style.opacity = match ? '1.0' : String(STACK_DIM_OPACITY);
-                    });
                 });
-            });
+                aEl.addEventListener('mouseleave', () => {
+                    hoverDimTimeout = setTimeout(() => {
+                        if (currentFocusedParent) return;
+                        clearNav();
+                        clearDimming();
+                    }, spriteConfig.submenu_close_delay);
+                });
+                aEl.querySelector('span[data-path]').onclick = (e) => {
+                    e.stopPropagation();
+                    const clickedNode = findNodeByPath(dataTree, aPath);
+                    if (clickedNode) renderContent(clickedNode);
+                };
+                const ancestorOffset = (ancestorParts.length - ai) * 28;
+                stackLabels.push({ element: aEl, position: worldPos, xPos: gData.xPos, zPos: gData.zPos, folderName: aPath, isGroup: false, isAncestor: true, ancestorOffset, anchorGroup: groupPath, navParentPath: null, navVisible: false });
+            }
+
+            const posTree = buildPositionTree(gData.folders, groupPath);
+            createChildLabels(posTree, groupPath, groupPath);
         }
     })();
 
@@ -1355,6 +1326,12 @@ async function createThreeScene(container, images, node) {
                 await waitFrame();
             }
         }
+    });
+
+    const sceneMaterials = new Set();
+    loadingPromise.then(() => {
+        for (const data of Object.values(stackGroups))
+            for (const mat of data.materials) sceneMaterials.add(mat);
     });
 
     // const stats = new Stats();
@@ -1411,19 +1388,11 @@ async function createThreeScene(container, images, node) {
 
         if (frameCount % 15 === 0) {
             const viewHeight = (camera.top - camera.bottom) / camera.zoom;
-            let targetLod;
-            if (viewHeight < 10) targetLod = 0;
-            else if (viewHeight < 40) targetLod = 1;
-            else targetLod = 2;
-
-            for (const key in stackMaterialCache) {
-                const mat = stackMaterialCache[key];
+            const targetLod = viewHeight < 10 ? 0 : viewHeight < 40 ? 1 : 2;
+            for (const mat of sceneMaterials) {
                 if (!mat._ssArray) continue;
                 const best = getBestLod(mat._ssArray, targetLod);
-                if (best && mat.map !== best) {
-                    mat.map = best;
-                    mat.needsUpdate = true;
-                }
+                if (best && mat.map !== best) { mat.map = best; mat.needsUpdate = true; }
             }
         }
         
@@ -1442,6 +1411,16 @@ async function createThreeScene(container, images, node) {
             // 1. Calculate positions and filter roughly
             for (let i = 0; i < stackLabels.length; i++) {
                 const lbl = stackLabels[i];
+
+                if (lbl.isAncestor) {
+                    if (activeGroupPath !== lbl.anchorGroup) {
+                        if (lbl.element.style.display !== 'none') lbl.element.style.display = 'none';
+                        continue;
+                    }
+                } else if (!lbl.isGroup && !lbl.navVisible) {
+                    if (lbl.element.style.display !== 'none') lbl.element.style.display = 'none';
+                    continue;
+                }
                 
                 // Manual World Rotation
                 const rX = lbl.xPos * cosR + lbl.zPos * sinR;
@@ -1466,11 +1445,26 @@ async function createThreeScene(container, images, node) {
                     labelCandidates.push({
                         el: lbl.element,
                         x: screenX,
-                        y: screenY,
+                        y: lbl.isAncestor ? screenY - lbl.ancestorOffset : screenY,
+                        anchorY: screenY,
                         d: dist
                     });
                 } else {
                     if (lbl.element.style.display !== 'none') lbl.element.style.display = 'none';
+                }
+            }
+
+            // 1b. Resolve overlapping labels with predictable vertical offset
+            const OVERLAP_THRESH = 30;
+            const LABEL_OFFSET_Y = 28;
+            labelCandidates.sort((a, b) => a.el.dataset.folderName < b.el.dataset.folderName ? -1 : 1);
+            for (let i = 0; i < labelCandidates.length; i++) {
+                for (let j = i + 1; j < labelCandidates.length; j++) {
+                    const dx = Math.abs(labelCandidates[i].x - labelCandidates[j].x);
+                    const dy = Math.abs(labelCandidates[i].y - labelCandidates[j].y);
+                    if (dx < OVERLAP_THRESH && dy < OVERLAP_THRESH) {
+                        labelCandidates[j].y = labelCandidates[i].y + LABEL_OFFSET_Y;
+                    }
                 }
             }
 
@@ -1482,11 +1476,152 @@ async function createThreeScene(container, images, node) {
                 const cand = labelCandidates[i];
                 if (i < MAX_LABELS) {
                     if (cand.el.style.display !== 'block') cand.el.style.display = 'block';
-                    // Use Transform instead of Top/Left to avoid reflows
                     cand.el.style.transform = `translate3d(${cand.x.toFixed(1)}px, ${cand.y.toFixed(1)}px, 0)`;
+                    cand.el._screenX = cand.x;
+                    cand.el._screenY = cand.y;
+                    cand.el._screenVisible = true;
                 } else {
                     if (cand.el.style.display !== 'none') cand.el.style.display = 'none';
+                    cand.el._screenVisible = false;
                 }
+            }
+
+            // 4. Wire system
+            const WIRE = { r: 12, pad: 20, biasMin: 80, biasRange: 120, arrowSize: 6, arrowMinLen: 400 };
+
+            function roundCorner(d, a, c, b, maxR) {
+                const d1x = c.x-a.x, d1y = c.y-a.y, d2x = b.x-c.x, d2y = b.y-c.y;
+                const l1 = Math.hypot(d1x, d1y), l2 = Math.hypot(d2x, d2y);
+                const r = Math.min(maxR, l1*0.45, l2*0.45);
+                if (r < 1) return d + ` L ${c.x} ${c.y}`;
+                return d + ` L ${c.x-d1x/l1*r} ${c.y-d1y/l1*r} Q ${c.x} ${c.y}, ${c.x+d2x/l2*r} ${c.y+d2y/l2*r}`;
+            }
+
+            function routeWire(a, b) {
+                const { r: R, pad: P, biasMin: bm, biasRange: br } = WIRE;
+                let wp;
+                if (b.x > a.x + P) {
+                    const mx = (a.x + b.x) / 2;
+                    wp = [{ x: mx, y: a.y }, { x: mx, y: b.y }];
+                } else {
+                    const bias = 0.5 + Math.min(Math.max((Math.abs(b.y - a.y) - bm) / br, 0), 1) * 0.35;
+                    const rx = Math.max(a.x, b.x) + P, lx = Math.min(a.x, b.x) - P;
+                    wp = [{ x: rx, y: a.y }, { x: rx, y: a.y+(b.y-a.y)*bias }, { x: lx, y: a.y+(b.y-a.y)*bias }, { x: lx, y: b.y }];
+                }
+                const pts = [a, ...wp, b];
+                let d = '';
+                for (let i = 1; i < pts.length - 1; i++) d = roundCorner(d, pts[i-1], pts[i], pts[i+1], R);
+                return { d: d + ` L ${b.x} ${b.y}`, pts };
+            }
+
+            function wireD(a, b) { const w = routeWire(a, b); return { d: `M ${a.x} ${a.y}` + w.d, pts: w.pts }; }
+            function labelR(el) { return { x: (el._screenX||0) + (el.offsetWidth||60), y: (el._screenY||0) + (el.offsetHeight||18)/2 }; }
+            function labelL(el) { return { x: el._screenX||0, y: (el._screenY||0) + (el.offsetHeight||18)/2 }; }
+
+            function chainWires(els) {
+                let d = '';
+                const arrows = [];
+                for (let i = 0; i < els.length - 1; i++) {
+                    const w = wireD(labelR(els[i]), labelL(els[i+1]));
+                    d += w.d;
+                    arrows.push(w.pts);
+                }
+                return { d, arrows };
+            }
+
+            // Arrow: midpoint of path, chevron pointing in travel direction
+            let _arrows = [];
+            function queueArrow(pts, dim) {
+                let total = 0;
+                const lens = [];
+                for (let i = 0; i < pts.length - 1; i++) { const l = Math.hypot(pts[i+1].x-pts[i].x, pts[i+1].y-pts[i].y); lens.push(l); total += l; }
+                if (total < WIRE.arrowMinLen) return;
+                let target = total / 2, acc = 0;
+                for (let i = 0; i < lens.length; i++) {
+                    if (acc + lens[i] >= target) {
+                        const t = (target - acc) / lens[i];
+                        _arrows.push({
+                            x: pts[i].x + (pts[i+1].x-pts[i].x)*t,
+                            y: pts[i].y + (pts[i+1].y-pts[i].y)*t,
+                            a: Math.atan2(pts[i+1].y-pts[i].y, pts[i+1].x-pts[i].x) * 180 / Math.PI,
+                            dim
+                        });
+                        return;
+                    }
+                    acc += lens[i];
+                }
+            }
+            function flushArrows() {
+                wireArrowG.innerHTML = '';
+                const s = WIRE.arrowSize, ns = 'http://www.w3.org/2000/svg';
+                for (const ar of _arrows) {
+                    const g = document.createElementNS(ns, 'g');
+                    g.setAttribute('transform', `translate(${ar.x},${ar.y}) rotate(${ar.a})`);
+                    g.classList.add('wire-arrow');
+                    if (ar.dim) g.classList.add('wire-arrow-dim');
+                    for (const dy of [-s, s]) {
+                        const l = document.createElementNS(ns, 'line');
+                        l.setAttribute('x1', -s); l.setAttribute('y1', dy); l.setAttribute('x2', 0); l.setAttribute('y2', 0);
+                        g.appendChild(l);
+                    }
+                    wireArrowG.appendChild(g);
+                }
+            }
+
+            if (activeGroupPath) {
+                _arrows = [];
+                const ancestorEls = stackLabels.filter(sl => sl.isAncestor && sl.anchorGroup === activeGroupPath && sl.element.style.display === 'block')
+                    .sort((a, b) => b.ancestorOffset - a.ancestorOffset).map(sl => sl.element);
+                const gSl = stackLabels.find(sl => sl.isGroup && sl.folderName === activeGroupPath);
+                const gEl = gSl && gSl.element.style.display === 'block' ? gSl.element : null;
+                const childEls = [];
+                if (activeLabelPath && activeLabelPath !== activeGroupPath) {
+                    let cur = activeGroupPath;
+                    for (const p of activeLabelPath.slice(activeGroupPath.length + 1).split('/')) {
+                        cur += '/' + p;
+                        const cl = stackLabels.find(sl => !sl.isGroup && !sl.isAncestor && sl.folderName === cur && sl.element.style.display === 'block');
+                        if (cl) childEls.push(cl.element);
+                    }
+                }
+
+                const anc = gEl ? [...ancestorEls, gEl] : ancestorEls;
+                const main = gEl ? [gEl, ...childEls] : childEls;
+
+                const ancW = chainWires(anc);
+                wirePathAncestor.setAttribute('d', ancW.d);
+                ancW.arrows.forEach(pts => queueArrow(pts, false));
+
+                const mainW = chainWires(main);
+                let mainD = mainW.d;
+                mainW.arrows.forEach(pts => queueArrow(pts, false));
+                const isLeaf = activeLabelPath && !stackLabels.some(sl => !sl.isGroup && !sl.isAncestor && sl.navParentPath === activeLabelPath);
+                if (!isLeaf && main.length) {
+                    const mw = wireD(labelR(main[main.length - 1]), { x: mouseX, y: mouseY });
+                    mainD += mw.d;
+                    queueArrow(mw.pts, false);
+                }
+                wirePath.setAttribute('d', mainD);
+
+                const onPath = new Set([...(gEl ? [gEl.dataset.folderName] : []), ...childEls.map(el => el.dataset.folderName)]);
+                let dimD = '';
+                for (const cel of main) {
+                    const cp = cel.dataset.folderName;
+                    for (const sl of stackLabels) {
+                        if (sl.isGroup || sl.isAncestor || !sl.navVisible || sl.navParentPath !== cp || sl.element.style.display !== 'block' || onPath.has(sl.folderName)) continue;
+                        const w = wireD(labelR(cel), labelL(sl.element));
+                        dimD += w.d;
+                        queueArrow(w.pts, true);
+                    }
+                }
+                wirePathDim.setAttribute('d', dimD);
+                flushArrows();
+                wireSvg.style.display = '';
+            } else {
+                wirePath.setAttribute('d', '');
+                wirePathAncestor.setAttribute('d', '');
+                wirePathDim.setAttribute('d', '');
+                wireArrowG.innerHTML = '';
+                wireSvg.style.display = 'none';
             }
         }
 
