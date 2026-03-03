@@ -822,10 +822,40 @@ body {{
     flex: 1;
     overflow-y: auto;
 }}
+#tree-history {{
+    border-top: 1px solid #333;
+    overflow-y: auto;
+    max-height: 80px;
+    margin-top: 6px;
+    margin-left: -10px;
+    padding: 6px 10px;
+    width: calc(100% + 20px);
+    box-sizing: border-box;
+    font-family: monospace;
+    font-size: var(--font-ui, 11px);
+    line-height: 1.8;
+    display: block;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}}
+.history-label {{ color: #555; }}
+.history-item {{ cursor: pointer; color: #44f; display: inline; white-space: nowrap; }}
+.history-item:hover {{ background: #222; color: #44f; }}
+.history-item:hover .history-num {{ color: #555; }}
+.history-num {{ color: #555; margin-right: 2px; }}
+.history-sep {{ color: #333; margin: 0 3px; }}
+#tree-history-toggle {{
+    cursor: pointer;
+    color: #888;
+    font-family: monospace;
+    font-size: var(--font-ui, 11px);
+    user-select: none;
+    white-space: nowrap;
+    margin-left: auto;
+}}
 #tree-search {{
     width: 60%;
     padding: 4px 6px;
-    margin-bottom: 6px;
     background: rgba(0,0,0,0);
     color: white;
     border: none;
@@ -911,8 +941,12 @@ canvas {{ display: block; width: 100%; height: 100%; }}
 </head>
 <body>
 <div id="tree">
-    <input id="tree-search" type="text" placeholder="search..." />
+    <div id="tree-toolbar" style="display:flex;align-items:center;margin-bottom:6px;">
+        <input id="tree-search" type="text" placeholder="search..." />
+        <span id="tree-history-toggle">&lt;&lt;</span>
+    </div>
     <div id="tree-content"></div>
+    <div id="tree-history" style="display:none;"></div>
 </div>
 <div id="content"></div>
 <script type="importmap">
@@ -935,11 +969,32 @@ import {{ BufferGeometryUtils }} from 'three/addons/utils/BufferGeometryUtils.js
     const searchInput = document.getElementById('tree-search');
     let dragging = false, ox = 0, oy = 0, tabIndex = -1, visibleMatches = [];
 
+    const historyToggle = document.getElementById('tree-history-toggle');
+    const historyPanel = document.getElementById('tree-history');
+    let historyOpen = false;
+    historyToggle.onclick = (e) => {{
+        e.stopPropagation();
+        if (!historyOpen) {{
+            tree.style.width = tree.offsetWidth + 'px';
+        }} else {{
+            tree.style.width = 'max-content';
+        }}
+        historyOpen = !historyOpen;
+        historyPanel.style.display = historyOpen ? 'block' : 'none';
+        historyToggle.style.color = historyOpen ? '#44f' : '#888';
+    }};
+
+    historyPanel.addEventListener('mousedown', (e) => {{
+        if (e.target.closest('.history-item, #tree-history-toggle')) return;
+        dragging = true; ox = e.clientX - tree.offsetLeft; oy = e.clientY - tree.offsetTop;
+        tree.style.cursor = 'grabbing'; document.body.style.userSelect = 'none';
+    }});
+
     tree.style.left = Math.floor(Math.random() * Math.max(0, innerWidth - 300)) + 'px';
     tree.style.top = Math.floor(Math.random() * Math.max(0, innerHeight - 400)) + 'px';
 
     tree.addEventListener('mousedown', (e) => {{
-        if (e.target.closest('.tree-link, #tree-search')) return;
+        if (e.target.closest('.tree-link, #tree-search, #tree-history-toggle, .history-item')) return;
         dragging = true; ox = e.clientX - tree.offsetLeft; oy = e.clientY - tree.offsetTop;
         tree.style.cursor = 'grabbing'; document.body.style.userSelect = 'none';
     }});
@@ -1429,7 +1484,7 @@ function disposeScene(sceneData) {{
     }}
 }}
 
-async function createThreeScene(container, images, node) {{
+async function createThreeScene(container, images, node, highlightPath) {{
     const scene = new THREE.Scene();
     const grouped = {{}};
     const stackGroups = {{}};
@@ -1974,6 +2029,10 @@ async function createThreeScene(container, images, node) {{
             }});
         }}
 
+        document.addEventListener('keydown', (e) => {{
+            if (e.key === 'Escape') {{ clearTimeout(hoverDimTimeout); clearNav(); clearDimming(); unfocusAll(); }}
+        }});
+
         // Build a position tree from flat folder list per group
         function buildPositionTree(folders, basePath) {{
             const root = {{ children: {{}}, path: basePath, maxY: 0, xPos: 0, zPos: 0 }};
@@ -2012,7 +2071,8 @@ async function createThreeScene(container, images, node) {{
             const el = document.createElement('span');
             el.className = 'stack-label' + (isGroup ? '' : ' nav-child-label');
             el.dataset.folderName = path;
-            el.innerHTML = `<span style="padding:2px 4px;cursor:pointer" data-path="${{path}}">${{name}}</span>`;
+            const colorStyle = path === highlightPath ? 'color:#44f;' : '';
+            el.innerHTML = `<span style="padding:2px 4px;cursor:pointer;${{colorStyle}}" data-path="${{path}}">${{name}}</span>`;
             el.addEventListener('wheel', (e) => {{ e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }}, {{ passive: false }});
             labelContainer.appendChild(el);
 
@@ -2056,19 +2116,22 @@ async function createThreeScene(container, images, node) {{
         }}
 
         for (const [groupKey, gData] of Object.entries(groupLabelData)) {{
-            const groupPath = scenePath ? scenePath + '/' + groupKey : groupKey;
+            const rawGroupPath = scenePath ? scenePath + '/' + groupKey : groupKey;
+            const isLeafDup = rawGroupPath !== scenePath && scenePath.endsWith('/' + groupKey) && findNodeByPath(dataTree, rawGroupPath) === null;
+            const groupPath = isLeafDup ? scenePath : rawGroupPath;
             const worldPos = new THREE.Vector3(gData.xPos, gData.maxY, gData.zPos);
             const entry = createLabel(groupKey, groupPath, worldPos, true, null, groupPath);
 
-            // Ancestor labels above group label
             const ancestorParts = scenePath ? scenePath.split('/') : [];
-            for (let ai = 0; ai < ancestorParts.length; ai++) {{
+            const ancestors = isLeafDup ? ancestorParts.slice(0, -1) : ancestorParts;
+            for (let ai = 0; ai < ancestors.length; ai++) {{
                 const aPath = ancestorParts.slice(0, ai + 1).join('/');
                 const aName = ancestorParts[ai];
                 const aEl = document.createElement('span');
                 aEl.className = 'stack-label nav-ancestor-label';
                 aEl.dataset.folderName = aPath;
-                aEl.innerHTML = `<span style="padding:2px 4px;cursor:pointer;color:#888" data-path="${{aPath}}">${{aName}}</span>`;
+                const aColor = aPath === highlightPath ? '#44f' : '#888';
+                aEl.innerHTML = `<span style="padding:2px 4px;cursor:pointer;color:${{aColor}}" data-path="${{aPath}}">${{aName}}</span>`;
                 aEl.addEventListener('wheel', (e) => {{ e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }}, {{ passive: false }});
                 labelContainer.appendChild(aEl);
                 aEl.addEventListener('mouseenter', () => {{
@@ -2086,7 +2149,7 @@ async function createThreeScene(container, images, node) {{
                     const clickedNode = findNodeByPath(dataTree, aPath);
                     if (clickedNode) renderContent(clickedNode);
                 }};
-                const ancestorOffset = (ancestorParts.length - ai) * 28;
+                const ancestorOffset = (ancestors.length - ai) * 28;
                 stackLabels.push({{ element: aEl, position: worldPos, xPos: gData.xPos, zPos: gData.zPos, folderName: aPath, isGroup: false, isAncestor: true, ancestorOffset, anchorGroup: groupPath, navParentPath: null, navVisible: false }});
             }}
 
@@ -2280,32 +2343,36 @@ async function createThreeScene(container, images, node) {{
                 return d + ` L ${{c.x-d1x/l1*r}} ${{c.y-d1y/l1*r}} Q ${{c.x}} ${{c.y}}, ${{c.x+d2x/l2*r}} ${{c.y+d2y/l2*r}}`;
             }}
 
-            function routeWire(a, b) {{
+            function routeWire(a, b, dir) {{
                 const {{ r: R, pad: P, biasMin: bm, biasRange: br }} = WIRE;
+                const flip = dir === -1;
+                const ra = flip ? {{ x: -a.x, y: a.y }} : a;
+                const rb = flip ? {{ x: -b.x, y: b.y }} : b;
                 let wp;
-                if (b.x > a.x + P) {{
-                    const mx = (a.x + b.x) / 2;
-                    wp = [{{ x: mx, y: a.y }}, {{ x: mx, y: b.y }}];
+                if (rb.x > ra.x + P) {{
+                    const mx = (ra.x + rb.x) / 2;
+                    wp = [{{ x: mx, y: ra.y }}, {{ x: mx, y: rb.y }}];
                 }} else {{
-                    const bias = 0.5 + Math.min(Math.max((Math.abs(b.y - a.y) - bm) / br, 0), 1) * 0.35;
-                    const rx = Math.max(a.x, b.x) + P, lx = Math.min(a.x, b.x) - P;
-                    wp = [{{ x: rx, y: a.y }}, {{ x: rx, y: a.y+(b.y-a.y)*bias }}, {{ x: lx, y: a.y+(b.y-a.y)*bias }}, {{ x: lx, y: b.y }}];
+                    const bias = 0.5 + Math.min(Math.max((Math.abs(rb.y - ra.y) - bm) / br, 0), 1) * 0.35;
+                    const rx = Math.max(ra.x, rb.x) + P, lx = Math.min(ra.x, rb.x) - P;
+                    wp = [{{ x: rx, y: ra.y }}, {{ x: rx, y: ra.y+(rb.y-ra.y)*bias }}, {{ x: lx, y: ra.y+(rb.y-ra.y)*bias }}, {{ x: lx, y: rb.y }}];
                 }}
-                const pts = [a, ...wp, b];
+                const pts = [ra, ...wp, rb];
+                if (flip) pts.forEach(p => p.x = -p.x);
                 let d = '';
                 for (let i = 1; i < pts.length - 1; i++) d = roundCorner(d, pts[i-1], pts[i], pts[i+1], R);
-                return {{ d: d + ` L ${{b.x}} ${{b.y}}`, pts }};
+                return {{ d: d + ` L ${{pts[pts.length-1].x}} ${{pts[pts.length-1].y}}`, pts }};
             }}
 
-            function wireD(a, b) {{ const w = routeWire(a, b); return {{ d: `M ${{a.x}} ${{a.y}}` + w.d, pts: w.pts }}; }}
+            function wireD(a, b, dir) {{ const w = routeWire(a, b, dir); return {{ d: `M ${{a.x}} ${{a.y}}` + w.d, pts: w.pts }}; }}
             function labelR(el) {{ return {{ x: (el._screenX||0) + (el.offsetWidth||60), y: (el._screenY||0) + (el.offsetHeight||18)/2 }}; }}
             function labelL(el) {{ return {{ x: el._screenX||0, y: (el._screenY||0) + (el.offsetHeight||18)/2 }}; }}
 
-            function chainWires(els) {{
+            function chainWires(els, out, inp, dir) {{
                 let d = '';
                 const arrows = [];
                 for (let i = 0; i < els.length - 1; i++) {{
-                    const w = wireD(labelR(els[i]), labelL(els[i+1]));
+                    const w = wireD(out(els[i]), inp(els[i+1]), dir);
                     d += w.d;
                     arrows.push(w.pts);
                 }}
@@ -2370,16 +2437,30 @@ async function createThreeScene(container, images, node) {{
                 const anc = gEl ? [...ancestorEls, gEl] : ancestorEls;
                 const main = gEl ? [gEl, ...childEls] : childEls;
 
-                const ancW = chainWires(anc);
+                // Determine flow direction from group label vs average child X
+                let flowRight = true;
+                if (gEl) {{
+                    const visibleChildren = stackLabels.filter(sl => !sl.isGroup && !sl.isAncestor && sl.navVisible && sl.element.style.display === 'block' && sl.element._screenVisible);
+                    if (visibleChildren.length > 0) {{
+                        const avgChildX = visibleChildren.reduce((s, sl) => s + (sl.element._screenX || 0), 0) / visibleChildren.length;
+                        const groupX = gEl._screenX || 0;
+                        flowRight = avgChildX >= groupX;
+                    }}
+                }}
+                const wireDir = flowRight ? 1 : -1;
+                const labelOut = flowRight ? labelR : labelL;
+                const labelIn = flowRight ? labelL : labelR;
+
+                const ancW = chainWires(anc, labelOut, labelIn, wireDir);
                 wirePathAncestor.setAttribute('d', ancW.d);
                 ancW.arrows.forEach(pts => queueArrow(pts, false));
 
-                const mainW = chainWires(main);
+                const mainW = chainWires(main, labelOut, labelIn, wireDir);
                 let mainD = mainW.d;
                 mainW.arrows.forEach(pts => queueArrow(pts, false));
                 const isLeaf = activeLabelPath && !stackLabels.some(sl => !sl.isGroup && !sl.isAncestor && sl.navParentPath === activeLabelPath);
                 if (!isLeaf && main.length) {{
-                    const mw = wireD(labelR(main[main.length - 1]), {{ x: mouseX, y: mouseY }});
+                    const mw = wireD(labelOut(main[main.length - 1]), {{ x: mouseX, y: mouseY }}, wireDir);
                     mainD += mw.d;
                     queueArrow(mw.pts, false);
                 }}
@@ -2391,7 +2472,7 @@ async function createThreeScene(container, images, node) {{
                     const cp = cel.dataset.folderName;
                     for (const sl of stackLabels) {{
                         if (sl.isGroup || sl.isAncestor || !sl.navVisible || sl.navParentPath !== cp || sl.element.style.display !== 'block' || onPath.has(sl.folderName)) continue;
-                        const w = wireD(labelR(cel), labelL(sl.element));
+                        const w = wireD(labelOut(cel), labelIn(sl.element), wireDir);
                         dimD += w.d;
                         queueArrow(w.pts, true);
                     }}
@@ -2443,7 +2524,53 @@ function updateURL(node) {{
     history.pushState(null, '', '?path=' + encodeURIComponent(path)); 
 }}
 
+const NAV_HISTORY_MAX = 20;
+const navHistory = [];
+
+function recordHistory(node) {{
+    const entry = {{ path: node.path, name: node.name || node.path }};
+    const last = navHistory[navHistory.length - 1];
+    if (last && last.path === entry.path) return;
+    navHistory.push(entry);
+    if (navHistory.length > NAV_HISTORY_MAX) navHistory.shift();
+    updateHistoryDiv();
+}}
+
+function updateHistoryDiv() {{
+    const el = document.getElementById('tree-history');
+    const frag = document.createDocumentFragment();
+    const label = document.createElement('span');
+    label.className = 'history-label';
+    label.textContent = 'history:';
+    frag.appendChild(label);
+    frag.appendChild(document.createElement('br'));
+    for (let i = navHistory.length - 1; i >= 0; i--) {{
+        const h = navHistory[i];
+        const num = navHistory.length - i;
+        const sep = document.createElement('span');
+        sep.className = 'history-sep';
+        sep.textContent = '>';
+        frag.appendChild(sep);
+        const item = document.createElement('span');
+        item.className = 'history-item';
+        item.innerHTML = `<span class="history-num">${{num}}</span>${{h.name}}`;
+        item.title = h.path;
+        item.onclick = (e) => {{
+            e.stopPropagation();
+            const node = findNodeByPath(dataTree, h.path);
+            if (node) renderContent(node);
+        }};
+        frag.appendChild(item);
+        frag.appendChild(document.createTextNode(' '));
+    }}
+    el.innerHTML = '';
+    el.appendChild(frag);
+}}
+
 async function renderContent(node) {{
+    if (!isInitialLoad && (!currentNode || currentNode.path !== node.path)) {{
+        recordHistory(node);
+    }}
     if (!isInitialLoad) updateURL(node);
     const RANDOM_TEXTDIV_POSITION = spriteConfig.random_textdiv_position;
     const SEED = spriteConfig.seed;
@@ -2477,7 +2604,7 @@ async function renderContent(node) {{
 
         const label = document.createElement('div');
         label.className = 'div-label';
-        label.innerHTML = breadcrumbHtml(child.path, currentNode ? currentNode.path : null);
+        label.innerHTML = breadcrumbHtml(child.path, currentNode.path);
             
         label.style.pointerEvents = 'auto';
         label.querySelectorAll('span[data-path]').forEach(span => {{
@@ -2579,7 +2706,7 @@ scriptTags.forEach(oldScript => {{
                 oldScript.parentNode.replaceChild(newScript, oldScript);
             }});
             
-            const labelHtml = breadcrumbHtml(child.path, currentNode ? currentNode.path : null);
+            const labelHtml = breadcrumbHtml(child.path, currentNode.path);
             
             const labelDiv = document.createElement('div');
             labelDiv.className = 'div-label';
@@ -2662,7 +2789,7 @@ scriptTags.forEach(oldScript => {{
     await new Promise(resolve => requestAnimationFrame(resolve));
     const sceneDivs = Array.from(contentDiv.children).filter(d => d._sceneContainer);
     for (const div of sceneDivs) {{
-        scenePromises.push(createThreeScene(div._sceneContainer, div._sceneChild.ai, div._sceneChild));
+        scenePromises.push(createThreeScene(div._sceneContainer, div._sceneChild.ai, div._sceneChild, currentNode.path));
     }}
     await Promise.all(scenePromises);
     return Promise.resolve();
