@@ -1,7 +1,7 @@
 # .custom_processing - Variables you can override per folder
 
 # Sprite Configuration
-SPRITE_SIZE = 128  # int: any positive integer
+SPRITE_SIZE = 512  # int: any positive integer
 
 # Image Sharpening
 # SHARPEN = True  # bool: True, False

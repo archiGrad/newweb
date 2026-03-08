@@ -93,8 +93,8 @@ body {
 .tree-link { cursor: pointer; color: white; user-select: none; }
 .tree-caret:hover, .tree-name:hover, .tree-link.tree-hover { background: #222; }
 .content-div {
-    border-left: 1px solid #333;
-    border-bottom: 1px solid #333;
+    border-left: 1px solid #222;
+    border-bottom: 1px solid #222;
     box-sizing: border-box;
     position: relative;
     overflow: hidden;
@@ -218,6 +218,7 @@ canvas { display: block; width: 100%; height: 100%; }
 .home_inner {
     width: 50%;
     max-width: 700px;
+
 }
 
 .home_nav {
@@ -236,14 +237,13 @@ canvas { display: block; width: 100%; height: 100%; }
 
 
 .text_center_fullscreen {
-    font-size: 12px;
+    font-size: 14px;
     display: flex;
     justify-content: center;
     align-items: center;
     width: 100%;
-    min-height: 100%;  /* was height: 100% */
+    min-height: 100%;
 }
-
 
 
 .content_container {
@@ -417,18 +417,8 @@ canvas { display: block; width: 100%; height: 100%; }
 /* Links */
 a {
     color: rgb(255, 255, 255);
-    /* text-decoration: none; */
-}
-a:hover {
-    text-decoration: underline;
 }
 
-.link_red { color: #f44; }
-.link_green { color: #4f4; }
-.link_yellow { color: #ff4; }
-.link_purple { color: #b4f; }
-.link_orange { color: #f84; }
-.link_white { color: white; }
 
 /* Titles */
 .title_xl {
@@ -696,6 +686,12 @@ a:hover {
  .home_inner {
         width: 90%;
     }
+
+
+.page-separator {
+    border-top: 1px solid #111;
+}
+
 
 
 
