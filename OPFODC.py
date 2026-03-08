@@ -1,6 +1,8 @@
 from pathlib import Path
 import json
 import ast
+import subprocess
+import shutil
 from PIL import Image, ImageDraw, ImageFont
 from natsort import natsorted
 
@@ -12,7 +14,6 @@ DEFAULTS = {
     'SPRITESHEET_SIZE': 1024 * 4,
     'SPRITE_SIZE': 64,
     'RESIZE_METHOD': Image.LANCZOS,
-    'SPRITESHEET_FORMAT': 'webp',
     
     # Image Processing Defaults
     'SHARPEN': False,
@@ -67,7 +68,8 @@ DEFAULTS = {
     'COLORED_HTML_DOTS': True,
     'BREADCRUMB_HTML_DOTS': False,
     'SHOW_NAV_ACCESSORIES': False,
-    'SUBMENU_CLOSE_DELAY': 400
+    'SUBMENU_CLOSE_DELAY': 400,
+    'WIRE_STRAIGHT': True
 
 }
 
@@ -583,27 +585,41 @@ sheet = None
 slot_idx = 0
 saved_sheets = []
 
+def _convert_to_ktx2(png_path):
+    ktx2_path = png_path.replace('.png', '.ktx2')
+    try:
+        result = subprocess.run([
+            'toktx', '--t2', '--encode', 'uastc', '--uastc_quality', '2',
+            '--zcmp', '5', '--lower_left_maps_to_s0t0',
+            ktx2_path, png_path
+        ], capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"toktx error for {png_path}:\n  stdout: {result.stdout}\n  stderr: {result.stderr}")
+            raise RuntimeError(f"toktx failed with exit code {result.returncode}")
+    except FileNotFoundError:
+        print("ERROR: 'toktx' not found. Install KTX-Software: https://github.com/KhronosGroup/KTX-Software/releases")
+        raise
+    return ktx2_path
+
 def save_sheet_with_lod(sheet, sheet_idx, sprite_size):
-    fmt = DEFAULTS['SPRITESHEET_FORMAT']
-    base_path = f'spritesheets/sprites_{sheet_idx}_lod0.{fmt}'
-    sheet.save(base_path)
-    for lod in range(1, LOD_LEVELS):
-        target_sprite = LOD_TARGET_SPRITE_SIZES[lod]
-        if target_sprite >= sprite_size:
-            scale_factor = 1.0
+    for lod in range(LOD_LEVELS):
+        if lod == 0:
+            lod_sheet = sheet
         else:
-            scale_factor = target_sprite / sprite_size
-        new_size = max(1, int(sheet.width * scale_factor))
-        lod_sheet = sheet.resize((new_size, new_size), Image.LANCZOS)
-        lod_sheet.save(f'spritesheets/sprites_{sheet_idx}_lod{lod}.{fmt}')
+            target_sprite = LOD_TARGET_SPRITE_SIZES[lod]
+            scale_factor = 1.0 if target_sprite >= sprite_size else target_sprite / sprite_size
+            new_size = max(1, int(sheet.width * scale_factor))
+            lod_sheet = sheet.resize((new_size, new_size), Image.LANCZOS)
+        png_path = f'spritesheets/sprites_{sheet_idx}_lod{lod}.png'
+        lod_sheet.save(png_path)
+        _convert_to_ktx2(png_path)
     saved_sheets.append(sheet_idx)
     lod1_size = max(1, int(sheet.width * min(1.0, LOD_TARGET_SPRITE_SIZES[1] / sprite_size)))
     lod2_size = max(1, int(sheet.width * min(1.0, LOD_TARGET_SPRITE_SIZES[2] / sprite_size)))
     print(f"  Saved spritesheet {sheet_idx} (sprite_size={sprite_size}) with {LOD_LEVELS} LOD levels ({sheet.width}px -> {lod1_size}px -> {lod2_size}px)")
 
 def lod_paths(sheet_idx):
-    fmt = DEFAULTS['SPRITESHEET_FORMAT']
-    return [f'spritesheets/sprites_{sheet_idx}_lod{lod}.{fmt}' for lod in range(LOD_LEVELS)]
+    return [f'spritesheets/sprites_{sheet_idx}_lod{lod}.ktx2' for lod in range(LOD_LEVELS)]
 
 for item in all_image_items:
     img_path = item['path']
@@ -764,7 +780,8 @@ sprite_config = {
     'colored_html_dots': DEFAULTS['COLORED_HTML_DOTS'],
     'breadcrumb_html_dots': DEFAULTS['BREADCRUMB_HTML_DOTS'],
     'show_nav_accessories': DEFAULTS['SHOW_NAV_ACCESSORIES'],
-    'submenu_close_delay': DEFAULTS['SUBMENU_CLOSE_DELAY']
+    'submenu_close_delay': DEFAULTS['SUBMENU_CLOSE_DELAY'],
+    'wire_straight': DEFAULTS['WIRE_STRAIGHT']
 }
 
 # 5. Save BOTH the tree (lightweight) and the database (heavy)
@@ -791,7 +808,6 @@ with open('index.html', 'w', encoding='utf-8') as f:
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta charset="utf-8">
 
-
             
 
 </head>
@@ -808,8 +824,8 @@ with open('index.html', 'w', encoding='utf-8') as f:
 <script type="importmap">
 {{
   "imports": {{
-    "three": "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/"
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
   }}
 }}
 </script>
@@ -817,7 +833,9 @@ with open('index.html', 'w', encoding='utf-8') as f:
 <script type="module">
 import * as THREE from 'three';
 import {{ OrbitControls }} from 'three/addons/controls/OrbitControls.js';
-import {{ BufferGeometryUtils }} from 'three/addons/utils/BufferGeometryUtils.js';
+import {{ mergeGeometries }} from 'three/addons/utils/BufferGeometryUtils.js';
+import {{ KTX2Loader }} from 'three/addons/loaders/KTX2Loader.js';
+THREE.ColorManagement.enabled = false;
 
 (() => {{
     const tree = document.getElementById('tree');
@@ -859,6 +877,7 @@ import {{ BufferGeometryUtils }} from 'three/addons/utils/BufferGeometryUtils.js
 
     function clearSearch() {{
         visibleMatches.forEach(l => l.style.background = '');
+        activeScenes.forEach(s => {{ if (s.clearWireNav) s.clearWireNav(); }});
         searchInput.value = ''; tabIndex = -1;
         treeContent.querySelectorAll('.tree-item').forEach(el => el.style.display = '');
         treeContent.querySelectorAll('.tree-children').forEach(el => el.style.display = 'none');
@@ -869,12 +888,16 @@ import {{ BufferGeometryUtils }} from 'three/addons/utils/BufferGeometryUtils.js
         visibleMatches.forEach(l => l.style.background = '');
         if (idx >= 0 && idx < visibleMatches.length) {{
             visibleMatches[idx].style.background = '#333';
+            const p = visibleMatches[idx].dataset.path;
+            if (p) activeScenes.forEach(s => {{ if (s.driveWireNav) s.driveWireNav(p); }});
             const item = visibleMatches[idx].closest('.tree-item');
             if (item) {{
                 const top = item.offsetTop, bot = top + item.offsetHeight;
                 if (bot > treeContent.scrollTop + treeContent.clientHeight) treeContent.scrollTop = bot - treeContent.clientHeight;
                 else if (top < treeContent.scrollTop) treeContent.scrollTop = top;
             }}
+        }} else {{
+            activeScenes.forEach(s => {{ if (s.clearWireNav) s.clearWireNav(); }});
         }}
     }}
 
@@ -1020,6 +1043,9 @@ async function updateLoaderAsync() {{
 let dataTree;
 let spriteConfig;
 let activeScenes = [];
+let currentPage = 0;
+let allFilteredChildren = [];
+function getPageSize() {{ return window.innerWidth <= 768 ? 6 : 16; }}
 const textureCache = {{}};
 const pendingLoads = {{}};
 const stackMaterialCache = {{}};
@@ -1086,15 +1112,19 @@ function assembleHtmlParts(parts, paths) {{
 }}
 
 
+let ktx2Loader = null;
+function initKTX2(renderer) {{
+    if (ktx2Loader) return;
+    ktx2Loader = new KTX2Loader();
+    ktx2Loader.setTranscoderPath('https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/basis/');
+    ktx2Loader.detectSupport(renderer);
+}}
+
 async function loadSpritesheet(path) {{
     if (textureCache[path]) return textureCache[path];
     if (pendingLoads[path]) return pendingLoads[path];
     pendingLoads[path] = (async () => {{
-        const resp = await fetch(path);
-        const blob = await resp.blob();
-        const bitmap = await createImageBitmap(blob, {{ imageOrientation: 'flipY' }});
-        const texture = new THREE.CanvasTexture(bitmap);
-        texture.flipY = false;
+        const texture = await ktx2Loader.loadAsync(path);
         texture.minFilter = THREE.NearestFilter;
         texture.magFilter = THREE.NearestFilter;
         texture.generateMipmaps = false;
@@ -1200,6 +1230,8 @@ window.addEventListener('hashchange', () => {{
     if (node) renderContent(node);
 }});
 
+window.matchMedia('(max-width: 768px)').addEventListener('change', () => {{ if (currentNode) renderContent(currentNode); }});
+
 
 function precomputeCounts(node) {{
     let count = 0;
@@ -1258,9 +1290,11 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
             }}
         }};
         link.addEventListener('mouseenter', () => {{
+            if (window.innerWidth <= 768) return;
             activeScenes.forEach(s => {{ if (s.driveWireNav) s.driveWireNav(node.path); }});
         }});
         link.addEventListener('mouseleave', () => {{
+            if (window.innerWidth <= 768) return;
             activeScenes.forEach(s => {{ if (s.clearWireNav) s.clearWireNav(); }});
         }});
     }}
@@ -1325,6 +1359,7 @@ function _updateTreeCarets() {{
     }});
 }}
 function highlightTreePath(path) {{
+    if (window.innerWidth <= 768) return;
     if (_treeHoverPath === path) return;
     clearTreeHighlight();
     _treeHoverPath = path;
@@ -1604,9 +1639,11 @@ async function createThreeScene(container, images, node, highlightPath) {{
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000);
+    initKTX2(renderer);
     container.appendChild(renderer.domElement);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enablePan = true;
+    controls.zoomSpeed = 3.0;
 
     let maxStackHeight = 0;
     folders.forEach(folder => {{
@@ -1810,7 +1847,7 @@ const updateCount = () => {{
 
             for (const [bKey, bucket] of Object.entries(mergeBuckets)) {{
                 if (bucket.geoms.length > 0) {{
-                    const mergedGeo = BufferGeometryUtils.mergeBufferGeometries(bucket.geoms);
+                    const mergedGeo = mergeGeometries(bucket.geoms);
                     const mat = getStackMaterial(bucket.ssArray, folderName);
                     const mesh = new THREE.Mesh(mergedGeo, mat);
                     stackGroup.add(mesh);
@@ -1979,29 +2016,27 @@ const updateCount = () => {{
             const entry = {{ element: el, position: worldPos, xPos: worldPos.x, zPos: worldPos.z, folderName: path, isGroup, isAncestor: false, navParentPath, navVisible: false }};
             stackLabels.push(entry);
 
-            if (window.innerWidth > 768) {{
-                el.addEventListener('mouseenter', () => {{
-                    clearTimeout(hoverDimTimeout);
-                    if (currentFocusedParent || mouseIsDown) return;
-                    treeDrivenNav = false;
-                    activeGroupPath = rootGroupPath;
-                    setNavVisible(path);
-                    applyDimming(path);
-                    highlightTreePath(path);
-                }});
-                el.addEventListener('mouseleave', () => {{
-                    hoverDimTimeout = setTimeout(() => {{
-                        if (currentFocusedParent) return;
-                        if (activeGroupPath === rootGroupPath) return;
-                        resetNav();
-                    }}, spriteConfig.submenu_close_delay);
-                }});
-            }}
+            el.addEventListener('mouseenter', () => {{
+                clearTimeout(hoverDimTimeout);
+                if (currentFocusedParent || mouseIsDown) return;
+                treeDrivenNav = false;
+                activeGroupPath = rootGroupPath;
+                setNavVisible(path);
+                applyDimming(path);
+                highlightTreePath(path);
+            }});
+            el.addEventListener('mouseleave', () => {{
+                hoverDimTimeout = setTimeout(() => {{
+                    if (currentFocusedParent) return;
+                    if (activeGroupPath === rootGroupPath) return;
+                    resetNav();
+                }}, spriteConfig.submenu_close_delay);
+            }});
 
             el.querySelector('span[data-path]').onclick = (e) => {{
                 e.stopPropagation();
                 const clickedNode = findNodeByPath(dataTree, path);
-                if (clickedNode && clickedNode.path === node.path) focusStackGroup(path);
+                if (clickedNode && clickedNode.path === node.path) renderContent(clickedNode);
                 else if (clickedNode) renderContent(clickedNode);
             }};
 
@@ -2037,18 +2072,16 @@ const updateCount = () => {{
                 aEl.innerHTML = `<span style="padding:2px 4px;cursor:pointer;color:${{aColor}}" data-path="${{aPath}}">${{aName}}</span>`;
                 aEl.addEventListener('wheel', (e) => {{ e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }}, {{ passive: false }});
                 labelContainer.appendChild(aEl);
-                if (window.innerWidth > 768) {{
-                    aEl.addEventListener('mouseenter', () => {{
-                        clearTimeout(hoverDimTimeout);
-                        highlightTreePath(aPath);
-                    }});
-                    aEl.addEventListener('mouseleave', () => {{
-                        hoverDimTimeout = setTimeout(() => {{
-                            if (currentFocusedParent) return;
-                            resetNav();
-                        }}, spriteConfig.submenu_close_delay);
-                    }});
-                }}
+                aEl.addEventListener('mouseenter', () => {{
+                    clearTimeout(hoverDimTimeout);
+                    highlightTreePath(aPath);
+                }});
+                aEl.addEventListener('mouseleave', () => {{
+                    hoverDimTimeout = setTimeout(() => {{
+                        if (currentFocusedParent) return;
+                        resetNav();
+                    }}, spriteConfig.submenu_close_delay);
+                }});
                 aEl.querySelector('span[data-path]').onclick = (e) => {{
                     e.stopPropagation();
                     const clickedNode = findNodeByPath(dataTree, aPath);
@@ -2263,7 +2296,15 @@ const updateCount = () => {{
                 return {{ d: d + ` L ${{pts[pts.length-1].x}} ${{pts[pts.length-1].y}}`, pts }};
             }}
 
-            function wireD(a, b, dir) {{ const w = routeWire(a, b, dir); return {{ d: `M ${{a.x}} ${{a.y}}` + w.d, pts: w.pts }}; }}
+            const WIRE_STRAIGHT = spriteConfig.wire_straight;
+
+            function wireD(a, b, dir) {{
+                if (WIRE_STRAIGHT) {{
+                    const pts = [a, b];
+                    return {{ d: `M ${{a.x}} ${{a.y}} L ${{b.x}} ${{b.y}}`, pts }};
+                }}
+                const w = routeWire(a, b, dir); return {{ d: `M ${{a.x}} ${{a.y}}` + w.d, pts: w.pts }};
+            }}
             function labelR(el) {{ return {{ x: (el._screenX||0) + (el.offsetWidth||60), y: (el._screenY||0) + (el.offsetHeight||18)/2 }}; }}
             function labelL(el) {{ return {{ x: el._screenX||0, y: (el._screenY||0) + (el.offsetHeight||18)/2 }}; }}
 
@@ -2378,13 +2419,14 @@ const updateCount = () => {{
                 }}
                 wirePathDim.setAttribute('d', dimD);
                 flushArrows();
-                if (window.innerWidth > 768) wireSvg.style.display = '';
+                wireSvg.style.display = '';
             }} else {{
                 wirePath.setAttribute('d', '');
                 wirePathAncestor.setAttribute('d', '');
                 wirePathDim.setAttribute('d', '');
                 wireArrowG.innerHTML = '';
-                if (window.innerWidth > 768) wireSvg.style.display = 'none';            }}
+                wireSvg.style.display = 'none';
+            }}
         }}
 
         frameCount++;
@@ -2469,18 +2511,25 @@ function updateHistoryDiv() {{
     el.appendChild(frag);
 }}
 
-async function renderContent(node) {{
-    if (!isInitialLoad && (!currentNode || currentNode.path !== node.path)) {{
-        recordHistory(node);
+async function renderContent(node, page) {{
+    if (page === undefined) {{
+        if (!isInitialLoad && (!currentNode || currentNode.path !== node.path)) {{
+            recordHistory(node);
+        }}
+        if (!isInitialLoad) updateURL(node);
+        updateURL(node);
+        currentNode = node;
+        updateTreeState(true);
+        let ch = node.children.length > 0 ? node.children : [node];
+        allFilteredChildren = ch.filter(child => (child.ai.length > 0 || child.at.length > 0) && !child.hid);
+        currentPage = 0;
+    }} else {{
+        currentPage = page;
     }}
-    if (!isInitialLoad) updateURL(node);
+
     const RANDOM_TEXTDIV_POSITION = spriteConfig.random_textdiv_position;
     const SEED = spriteConfig.seed;
 
-    updateURL(node);
-    currentNode = node;
-    updateTreeState(true);
-    
     for (const key in stackMaterialCache) {{
         if (stackMaterialCache[key]) stackMaterialCache[key].dispose();
         delete stackMaterialCache[key];
@@ -2490,33 +2539,25 @@ async function renderContent(node) {{
     activeScenes = [];
     const contentDiv = document.getElementById('content');
     contentDiv.innerHTML = '';
+
+    const totalChildren = allFilteredChildren.length;
+    const totalPages = Math.ceil(totalChildren / getPageSize());
+    const start = currentPage * getPageSize();
+    const children = allFilteredChildren.slice(start, start + getPageSize());
             
-            
-   
     const scenePromises = []; 
-    let children = node.children.length > 0 ? node.children : [node];
-    children = children.filter(child => (child.ai.length > 0 || child.at.length > 0) && !child.hid);
     
     const count = children.length;
-    const cols = Math.ceil(Math.sqrt(count));
-            
-
-
     const isMobile = window.innerWidth <= 768;
+    const t = children.filter(c => !c.ai.length && c.at.length), d = children.filter(c => c.ai.length && !c.at.length);
+    const mvs = isMobile && count === 2 && (t.length === 2 || (t.length === 1 && d.length === 1));
+    let cols = mvs ? 1 : Math.ceil(Math.sqrt(count));
     
     for (const child of children) {{
         const div = document.createElement('div');
         div.className = 'content-div';
-        if (isMobile && count <= 3) {{
-            div.style.width = '100%';
-            div.style.height = `calc(${{100/count}}% - 2px)`;
-        }} else if (isMobile && count === 4) {{
-            div.style.width = '50%';
-            div.style.height = 'calc(50% - 2px)';
-        }} else {{
-            div.style.width = `calc(${{100/cols}}% - 2px)`;
-            div.style.height = count <= 2 ? '100%' : `calc(${{100/Math.ceil(count/cols)}}% - 2px)`;
-        }}
+        div.style.width = mvs ? '100%' : `calc(${{100/cols}}% - 2px)`;
+        div.style.height = mvs ? 'calc(50% - 2px)' : (count <= 2 ? '100%' : `calc(${{100/Math.ceil(count/cols)}}% - 2px)`);
 
         const label = document.createElement('div');
         label.className = 'div-label';
@@ -2678,6 +2719,22 @@ scriptTags.forEach(oldScript => {{
             contentDiv.lastElementChild.style.width = `calc(${{100 * remaining / cols}}% - 2px)`;
         }}
             
+    if (totalPages > 1) {{
+        const pagBar = document.createElement('div');
+        pagBar.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;gap:12px;align-items:center;z-index:9999;';
+        for (let i = 0; i < totalPages; i++) {{
+            const btn = document.createElement('span');
+            btn.textContent = i + 1;
+            btn.style.cssText = `color:${{i === currentPage ? '#ff3333' : '#ff333366'}};font-size:64px;font-family:monospace;font-weight:bold;cursor:pointer;padding:4px 12px;`;
+            btn.onmouseenter = () => btn.style.background = 'black';
+            btn.onmouseleave = () => btn.style.background = 'transparent';
+            if (i !== currentPage) btn.onclick = () => renderContent(currentNode, i);
+            pagBar.appendChild(btn);
+        }}
+        contentDiv.style.position = 'relative';
+        contentDiv.appendChild(pagBar);
+    }}
+
     await new Promise(resolve => requestAnimationFrame(resolve));
     const sceneDivs = Array.from(contentDiv.children).filter(d => d._sceneContainer);
     for (const div of sceneDivs) {{

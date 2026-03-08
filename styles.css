@@ -601,12 +601,12 @@ a:hover {
     }
     #tree {
         border: none;
-        border-bottom:  1px solid #333;
+        border-bottom:  1px solid #111;
         position: relative !important;
         top: unset !important;
         left: unset !important;
         width: 100% !important;
-        max-height: 20vh;
+        max-height: 30vh;
         min-width: unset;
         cursor: default;
         flex-shrink: 0;
@@ -624,6 +624,10 @@ a:hover {
         overflow: hidden;
     }
     .content-div {
+
+ border-left: 1px solid #111;
+ border-bottom: 1px solid #111;
+
         min-height: 0 !important;
         flex-direction: column !important;
 

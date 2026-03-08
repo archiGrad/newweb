@@ -4,8 +4,7 @@
 <link rel="stylesheet" href="styles.css">
 
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta charset="UTF-8">
-
+<meta charset="utf-8">
 
             
 
@@ -244,7 +243,7 @@ let spriteConfig;
 let activeScenes = [];
 let currentPage = 0;
 let allFilteredChildren = [];
-function getPageSize() { return window.innerWidth <= 768 ? 9 : 16; }
+function getPageSize() { return window.innerWidth <= 768 ? 6 : 16; }
 const textureCache = {};
 const pendingLoads = {};
 const stackMaterialCache = {};
@@ -489,9 +488,11 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {
             }
         };
         link.addEventListener('mouseenter', () => {
+            if (window.innerWidth <= 768) return;
             activeScenes.forEach(s => { if (s.driveWireNav) s.driveWireNav(node.path); });
         });
         link.addEventListener('mouseleave', () => {
+            if (window.innerWidth <= 768) return;
             activeScenes.forEach(s => { if (s.clearWireNav) s.clearWireNav(); });
         });
     }
@@ -556,6 +557,7 @@ function _updateTreeCarets() {
     });
 }
 function highlightTreePath(path) {
+    if (window.innerWidth <= 768) return;
     if (_treeHoverPath === path) return;
     clearTreeHighlight();
     _treeHoverPath = path;
@@ -1232,7 +1234,7 @@ const updateCount = () => {
             el.querySelector('span[data-path]').onclick = (e) => {
                 e.stopPropagation();
                 const clickedNode = findNodeByPath(dataTree, path);
-                if (clickedNode && clickedNode.path === node.path) focusStackGroup(path);
+                if (clickedNode && clickedNode.path === node.path) renderContent(clickedNode);
                 else if (clickedNode) renderContent(clickedNode);
             };
 
@@ -1492,7 +1494,15 @@ const updateCount = () => {
                 return { d: d + ` L ${pts[pts.length-1].x} ${pts[pts.length-1].y}`, pts };
             }
 
-            function wireD(a, b, dir) { const w = routeWire(a, b, dir); return { d: `M ${a.x} ${a.y}` + w.d, pts: w.pts }; }
+            const WIRE_STRAIGHT = spriteConfig.wire_straight;
+
+            function wireD(a, b, dir) {
+                if (WIRE_STRAIGHT) {
+                    const pts = [a, b];
+                    return { d: `M ${a.x} ${a.y} L ${b.x} ${b.y}`, pts };
+                }
+                const w = routeWire(a, b, dir); return { d: `M ${a.x} ${a.y}` + w.d, pts: w.pts };
+            }
             function labelR(el) { return { x: (el._screenX||0) + (el.offsetWidth||60), y: (el._screenY||0) + (el.offsetHeight||18)/2 }; }
             function labelL(el) { return { x: el._screenX||0, y: (el._screenY||0) + (el.offsetHeight||18)/2 }; }
 
