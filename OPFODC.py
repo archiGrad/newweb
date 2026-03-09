@@ -1262,8 +1262,7 @@ function buildTree(node, container, depth = 0, isLast = true, prefix = '') {{
         caret.onclick = (e) => {{
             e.stopPropagation();
             const cc = link._childContainer;
-            if (cc) cc.style.display = cc.style.display === 'none' ? 'block' : 'none';
-            updateTreeState();
+            if (cc) {{ const opening = cc.style.display === 'none'; cc.style.display = opening ? 'block' : 'none'; updateTreeState(opening); }}
         }};
         link.appendChild(caret);
         link.appendChild(document.createTextNode(' '));
@@ -2519,7 +2518,7 @@ async function renderContent(node, page) {{
         if (!isInitialLoad) updateURL(node);
         updateURL(node);
         currentNode = node;
-        updateTreeState(true);
+        updateTreeState(window.innerWidth > 768);
         let ch = node.children.length > 0 ? node.children : [node];
         allFilteredChildren = ch.filter(child => (child.ai.length > 0 || child.at.length > 0) && !child.hid);
         currentPage = 0;
