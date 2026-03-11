@@ -1,11 +1,51 @@
 <div class="text_center_fullscreen">
   <div class="home_inner">
-    <table cellpadding="0" cellspacing="0">
-      <tr>
-        <td>
-          <p>archigrad is a studio for architecture and computation. Operating within the traditional boundaries of architecture and urbanism. worldwide.</p>
-        </td>
-      </tr>
-    </table>
+    <br><span style="font-size:1em;">archigrad.io</span> 
+<br>is making [<span class="sw" data-pool="0">architecture</span>] and [<span class="sw" data-pool="0">architecture</span>].
+    <br>welcome to our [<span class="sw" data-pool="1">directory</span>].
+    <br>working [<span class="sw" data-pool="2">worldwide</span>].
+    <br>[<span class="sw" data-pool="3">🏛️</span>]
   </div>
 </div>
+<script>
+  (() => {
+    const pools = [
+      ['architecture','ecology','robotics','computation','design','software','hardware','fabrication'],
+      ['directory','folder','archive','filesystem','progress','structure','website','narrrative','projects','projection'],
+      ['worldwide','locally','in turkey','in belgium','on earth','in the cloud','on the edge','in the future','in the present','hardly'],
+      ['🏛️','🌿','🤖','💻','✏️','🔧','🏗️','🌍','☁️','⚡','🔬','📐','🛰️','🧱','🌐']
+    ];
+
+    function makeWeighted(pool, country) {
+      if (!country) return pool;
+      const c = 'in ' + country.toLowerCase();
+      const base = pool.map(w => w.toLowerCase()).includes(c) ? pool : [...pool, c];
+      const match = base.find(w => w.toLowerCase() === c);
+      return [...base, match, match, match];
+    }
+
+    function startSwap(span, pool) {
+      let current = span.textContent;
+      function swap() {
+        const filtered = pool.filter(w => w !== current);
+        current = filtered[Math.floor(Math.random() * filtered.length)];
+        span.textContent = current;
+        setTimeout(swap, 10 + Math.random() * 990);
+      }
+      setTimeout(swap, 10 + Math.random() * 990);
+    }
+
+    function init(country) {
+      document.querySelectorAll('.sw').forEach(span => {
+        const i = parseInt(span.dataset.pool);
+        const pool = i === 2 ? makeWeighted(pools[i], country) : pools[i];
+        startSwap(span, pool);
+      });
+    }
+
+    fetch('https://ipapi.co/json/')
+      .then(r => r.json())
+      .then(data => init(data.country_name))
+      .catch(() => init(null));
+  })();
+</script>
