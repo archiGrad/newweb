@@ -60,6 +60,7 @@ DEFAULTS = {
     'RANDOM_ZOOM': False,
     'ZOOM_VALUE': 0.4,
     'RANDOM_TEXTDIV_POSITION': False,
+    'DIV_RATIO_HALF': False,
     'LOADINGSCREEN_IMG_INCREMENT': 50,
 
     #stack labels/annotations 
@@ -69,7 +70,7 @@ DEFAULTS = {
     'BREADCRUMB_HTML_DOTS': False,
     'SHOW_NAV_ACCESSORIES': False,
     'SUBMENU_CLOSE_DELAY': 400,
-    'WIRE_STRAIGHT': True
+    'WIRE_STRAIGHT': False
 
 }
 
@@ -771,6 +772,7 @@ sprite_config = {
     'ordered_grid_layout': DEFAULTS['ORDERED_GRID_LAYOUT'],
     'rotation_speed': DEFAULTS['ROTATION_SPEED'],
     'random_textdiv_position': DEFAULTS['RANDOM_TEXTDIV_POSITION'],
+    'div_ratio_half': DEFAULTS['DIV_RATIO_HALF'],
     'random_zoom': DEFAULTS['RANDOM_ZOOM'],
     'zoom_value': DEFAULTS['ZOOM_VALUE'],
     'quickload_threshold': DEFAULTS['QUICKLOAD_THRESHOLD'],
@@ -2527,6 +2529,7 @@ async function renderContent(node, page) {{
     }}
 
     const RANDOM_TEXTDIV_POSITION = spriteConfig.random_textdiv_position;
+    const DIV_RATIO_HALF = spriteConfig.div_ratio_half;
     const SEED = spriteConfig.seed;
 
     for (const key in stackMaterialCache) {{
@@ -2550,14 +2553,21 @@ async function renderContent(node, page) {{
     const isMobile = window.innerWidth <= 768;
     const t = children.filter(c => !c.ai.length && c.at.length), d = children.filter(c => c.ai.length && !c.at.length);
     const mvs = isMobile && count === 2 && (t.length === 2 || (t.length === 1 && d.length === 1));
+    const asymmetric = !DIV_RATIO_HALF && !isMobile && count === 2 && t.length === 1 && d.length === 1;
     let cols = mvs ? 1 : Math.ceil(Math.sqrt(count));
     
     for (const child of children) {{
         const div = document.createElement('div');
         div.className = 'content-div';
-        div.style.width = mvs ? '100%' : `calc(${{100/cols}}% - 2px)`;
-        div.style.height = mvs ? 'calc(50% - 2px)' : (count <= 2 ? '100%' : `calc(${{100/Math.ceil(count/cols)}}% - 2px)`);
-
+        let childWidth;
+        if (asymmetric) {{
+            const isText = !child.ai.length && child.at.length;
+            childWidth = isText ? 'calc(40% - 2px)' : 'calc(60% - 2px)';
+        }} else {{
+            childWidth = mvs ? '100%' : `calc(${{100/cols}}% - 2px)`;
+        }}
+        div.style.width = childWidth;
+        div.style.height = mvs ? 'calc(50% - 2px)' : (count <= 2 ? '100%' : `calc(${{100/Math.ceil(count/cols)}}% - 2px)`); 
         const label = document.createElement('div');
         label.className = 'div-label';
         label.innerHTML = breadcrumbHtml(child.path, currentNode.path);

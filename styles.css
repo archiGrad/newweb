@@ -1,10 +1,11 @@
 /* Override these to change font sizes without re-running the Python script */
 :root {
-    --font-ui: 14px;
+    --font-ui: 12px;
     --font-dots-sm: 14px;
     --font-dots-md: 14px;
     --font-page-index: 14px;
     --font-loading-grid: 14px;
+    --text-content-fontsize: 16px;
 }
 
 
@@ -32,9 +33,12 @@ body {
     flex-direction: column;
     overflow-x: hidden;
     z-index: 1000;
-    background: rgba(0,0,0,0.85);
-    border: 1px solid #333;
+    border-radius: 0px;
     cursor: grab;
+    background: rgba(0,0,0);
+    border: 1px solid rgba(255,255,255, 0.1);
+
+
 }
 
 #tree-content {
@@ -123,6 +127,7 @@ body {
     z-index: 10;
 }
 .stack-label {
+    border: 1px solid white;
     position: absolute;
     top: 0;
     left: 0;
@@ -134,7 +139,8 @@ body {
     font-size: var(--font-ui, 11px);
     user-select: none;
     background: black;
-    border-radius: 4px;
+
+    border-radius: 15px;
     line-height: 1.6;
     white-space: nowrap;
 }
@@ -144,13 +150,13 @@ body {
 .stack-label .nav-count { color: white; margin-left: 2px; }
 .nav-ancestor-label { opacity: 0.7; }
 
-.nav-wire-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9; shape-rendering: crispEdges; mix-blend-mode: difference; }
+.nav-wire-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9; shape-rendering: crispEdges;  }
 
 .nav-wire-svg path { fill: none; stroke: white; stroke-width: 1; }
-.nav-wire-svg .nav-wire-path { stroke-width: 5; }
-.nav-wire-svg .nav-wire-path-ancestor { stroke: rgba(255,255,255,0.5); stroke-width: 5; }
+.nav-wire-svg .nav-wire-path { stroke-width: 1; }
+.nav-wire-svg .nav-wire-path-ancestor { stroke:#666 ; stroke-width: 1; }
 .nav-wire-svg .nav-wire-path-dim { stroke: rgba(255,255,255,0.2); }
-.wire-arrow line { stroke: white; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+.wire-arrow line { stroke: white; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
 .wire-arrow-dim line { stroke: rgba(255,255,255,0.3); stroke-width: 1; }
 .dot-sm { font-size: var(--font-dots-sm, 7px); }
 .dot-md { font-size: var(--font-dots-md, 9px); }
@@ -239,12 +245,13 @@ canvas { display: block; width: 100%; height: 100%; }
 
 
 .text_center_fullscreen {
-    font-size: 14px;
+    font-size: var(--text-content-fontsize, 5px);
     display: flex;
     justify-content: center;
     align-items: center;
     width: 100%;
     min-height: 100%;
+    line-height: 1;
 }
 
 
@@ -423,11 +430,6 @@ a {
 
 
 /* Titles */
-.title_xl {
-    font-size: 48px;
-    text-align: left;
-    margin: 20px 0;
-}
 
 .title_large {
     font-size: 36px;
@@ -468,13 +470,6 @@ a {
     height: 20px;
 }
 
-.spacer_medium {
-    height: 50px;
-}
-
-.spacer_large {
-    height: 100px;
-}
 
 /* Two Column Layout */
 .columns_2 {
@@ -491,26 +486,6 @@ a {
 }
 
 
-.columns_4 {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
-}
-
-
-.columns_5 {
-    display: grid; 
-    grid-template-columns: repeat(5, 1fr);
-    gap: 20px;
-    }
-
- 
-.columns_6 {
-    display: grid; 
-    grid-template-columns: repeat(6, 1fr);
-    gap: 20px;
-    }   
-
 
 .columns_2_left_wide {
     display: grid;
@@ -526,6 +501,13 @@ a {
 
 
 
+
+
+/* metadata */
+#info-zoom, #info-stacks, #info-images, .info-sep {
+    color: #444;
+    font-size: 11px;
+}
 
 /* CUSTOM SCROLLBAR */
 *::-webkit-scrollbar {
@@ -697,7 +679,7 @@ a {
 
 
 .text_center_fullscreen {
-    font-size: 10px;
+    font-size: 14px;
 
 
     
