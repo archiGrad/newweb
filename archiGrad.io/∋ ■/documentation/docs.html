@@ -1,0 +1,620 @@
+<style>
+
+
+body { 
+}
+
+
+
+
+
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin: 0 1px;
+  vertical-align: middle;
+}
+.filetree {
+  white-space: pre;
+  margin: 0.8em 0;
+}
+.hl-tag    { color: red; }
+.hl-attr   { color: green; }
+.hl-val    { color: blue; }
+.hl-css-k  { color: yellow; }
+.hl-css-v  { color: pink; }
+
+
+/* Two Column Layout */
+.columns_2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+
+
+
+.config-block { display: flex; flex-direction: column; }
+.config-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+
+
+
+.var-row-global:hover,
+.var-row-global-unique:hover,
+.var-row-custom:hover,
+.var-row-standard:hover,
+.var-row-standard-commented:hover { color: green; }
+
+.var-row-global { position: relative; display: flex; align-items: baseline;color:#333; padding: 2px 0; line-height:1; cursor: pointer }
+.var-row-global-unique { position: relative; display: flex; align-items: baseline;color:#777; padding: 2px 0; line-height:1; cursor: pointer }
+.var-row-custom { position: relative; display: flex; align-items: baseline;color:#777; padding: 2px 0; line-height:1; cursor: pointer }
+.var-row-standard { position: relative; display: flex; align-items: baseline;color:blue; padding: 2px 0; line-height:1; cursor: pointer }
+.var-row-standard-commented { position: relative; display: flex; align-items: baseline;color:#333; padding: 2px 0; line-height:1; cursor: pointer }
+.t-default{ color:red;}
+
+.var-row-global-unique:hover .tooltip,
+.var-row-global:hover .tooltip,
+.var-row-standard:hover .tooltip,
+.var-row-standard-commented:hover .tooltip,
+.var-row-custom:hover .tooltip { opacity: 1; pointer-events: auto; }
+
+.tooltip {
+ border:4px solid green;
+  background: black;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  left: 0px;
+  top: 3em;
+  color: green;
+  padding: 10px;
+  z-index: 100;
+	max-width: 400px;
+
+}
+
+
+.tooltip img {
+	max-width: 400px;
+    margin: 6px 0;
+    display: block;
+}
+
+
+iframe {
+    width: 100%;
+    height: 100%;
+    border: noauto}
+
+
+
+.full-width-img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.highlights{
+	color:blue;
+}
+
+
+
+
+
+
+</style>
+<script src="color.js"></script>
+
+<link rel="stylesheet" href="styles.css">
+<meta charset="UTF-8">
+
+<div class="text_center_fullscreen">
+<div class="home_inner">
+
+<br>
+<br>
+<br>
+<h1>docs archigrad.io</h1>
+
+<br>
+<br>
+<a href="#about">about</a>
+<a href="#bubbling-up">bubbling up</a>
+<a href="#text">text</a>
+<a href="#fontsize">font size</a>
+<a href="#images">images</a>
+<a href="#3d-models">3d models</a>
+<a href="#customize">customizing stacks</a>
+<a href="#forbidden_names">forbidden names</a>
+<a href="#keywords">keywords</a>
+<a href="#deploy">deploying</a>
+<a href="#future">future plans</a>
+
+<br>
+<br>
+<div>
+
+<h2 id="about">about</h2>
+<br>
+<br>
+
+<p>The whole website runs on the fact that images with transparency can represent 3D objects at a lower memory cost (but reduced accuracy) than traditional 3D models. This allows highly complex models to be used as simple 2D textures instead of loading them as geometry files.</p>
+<p>Things possible with images that are not possible with 3D objects: image comparing, image layering, more efficient optimization by removing duplicates (which there are many of), post-processing effects (sharpen, overlay, dither, animate), etc.</p>
+<p>Supported extensions: <code class="highlights">png</code>, <code class="highlights">jpg</code>, <code class="highlights">gif</code>, <code class="highlights">html</code></p>
+<p>The whole website acts as a folder structure with folders and content inside. Files can propagate through these folders — they can "bubble up" to the surface. This is the case for both images and text documents.</p>
+</div>
+
+<br>
+<br>
+<br>
+<br>
+
+<h2 id="bubbling-up">Bubbling up</h2>
+
+<br><br>
+<p>Throughout the folder structure, text and image files bubble up — files in child folders are accumulated as you traverse upward through the directories. At the root (archigrad.io), images are turned into stacks and groups, so all images across the website are visible at the root level.</p>
+<p>HTML files behave the same way, but there are two flags to control this, since accumulation is not always desired. For images there is no such control — all images will always bubble up.</p>
+
+<h3>How do I stop my HTML from bubbling up?</h3>
+<p><code class="highlights">.html_only_here</code> — HTML stays at this level only and does not propagate upward.</p>
+
+<h3>How do I stop all HTML from bubbling up?</h3>
+<p><code class="highlights">.html_stops_here</code> — No HTML passes through this folder upward.</p>
+
+<p>Place an empty file with either name in any directory. The content does not matter, only its presence. The easiest way is to create a new file and name it <code class="highlights">.html_stops_here</code> or <code class="highlights">.html_only_here</code>.</p>
+
+<p>These are represented as colored dots in the tree view and breadcrumb labels:</p>
+<br>
+<br>
+<ul>
+  <li><strong>Blue dot</strong> <span class="dot" style="background:#4a9eff"></span> — <code class="highlights">.html_only_here</code> is present in this folder</li>
+  <li><strong>Green dot</strong> <span class="dot" style="background:#4aff7a"></span> — <code class="highlights">.html_stops_here</code> is present in this folder</li>
+  <li><strong>White dots</strong> <span class="dot" style="background:#ddd"></span> (or colored if <code class="highlights">COLORED_HTML_DOTS = True</code>) — each dot represents one accumulated HTML file. When enabled, each HTML file gets a deterministic random color based on its path and <code class="highlights">SEED</code>, so the same file always appears as the same color across all nodes it propagates through.</li>
+</ul>
+
+<img src="/images/helper_images/tree_view_explained.png" class="full-width-img">
+
+
+<h2 id="text">How to add text content?</h2>
+
+<br>
+<br>
+<p>Text can only be written in a <code class="highlights">.html</code> file. It is recommended to use the existing template:</p>
+
+<pre>&lt;div class="text_center_fullscreen"&gt;
+  &lt;div class="home_inner"&gt;
+    &lt;span&gt;archigrad.io&lt;/span&gt;
+    &lt;br&gt;is making architecture.
+    &lt;br&gt;welcome to our website.
+  &lt;/div&gt;
+&lt;/div&gt;</pre>
+
+<br>
+<br>
+
+<h2 id="fontsize">How do I set font size?</h2>
+
+<br>
+<br>
+<p>Root CSS variables (override to change font sizes without re-running the Python script):</p>
+
+
+<br>
+<br>
+<h2 id="images">How to add images?</h2>
+<br>
+<p>Create a folder inside <code class="highlights">archigrad.io</code> or any child folder and put images in it.</p>
+<br>
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1em;">
+  <div>
+    <p><strong>Allowed:</strong> all files need to be in folders</p>
+    <div class="filetree">v archigrad.io
+  v projects
+      <span style="color:#4aff7a">image1.png</span>
+      <span style="color:#4aff7a">image2.png</span>
+</div>
+  </div>
+  <div>
+    <p><strong>Not allowed</strong> — a folder cannot contain both subfolders and images:</p>
+    <div class="filetree">v archigrad.io
+  v projects
+    v project_1
+        image1.png
+    <span style="color:#ff4a4a">imagea.png   ← not allowed alongside a subfolder</span>
+</div>
+  </div>
+</div>
+
+<h2 id="3d-models">How to add 3D models?</h2>
+
+<p>The website does not load 3D models — only textures. 3D models can be sliced and recreated as a 2D version stored on a spritesheet.</p>
+
+<p>All images are loaded from a single spritesheet so only one request is needed to fetch potentially hundreds of images. The spritesheet is stored as a <code class="highlights">.ktx2</code> file which does not need to be decompressed on the GPU — saving about 4× memory over PNG. GIFs are stored on this sheet as multiple frames laid out sequentially.</p>
+
+<h3>How do I make a stack?</h3>
+
+<p>Put images in a folder. Images are sorted alphabetically, with the first image at the bottom of the stack.</p>
+
+<p>Two suggested workflows:</p>
+
+<br>
+<br>
+
+<ol>
+  <li>Under the archigrad.io folder, add images to a named folder in the desired order.</li>
+  <li>Optionally place a <code class="highlights">.custom_processing</code> file next to them with adjusted settings.</li>
+  <li>Run the script.</li>
+  <li>The stack is now visible.</li>
+</ol>
+
+<br>
+<br>
+<ol>
+  <li>Open the Houdini file, load your model, pick your size, and render out the stack frames.</li>
+  <li>Optionally place a <code class="highlights">.custom_processing</code> file next to them (can be exported from the HDA).</li>
+  <li>Run the script.</li>
+  <li>The stack is now visible.</li>
+</ol>
+
+<h3>Adding 3D models via Houdini</h3>
+<p>Only flipbook rendering is used — OpenGL and Karma are too slow to be practical. Whatever is visible in the viewport will be shown, including attributes, visualizers, and all viewport shading settings.</p>
+
+<h4>Static geometry</h4>
+<ol>
+  <li>Build geometry in Houdini and use the HDA to export it.</li>
+  <li>Alternatively, bake a texture in Blender, import the model into Houdini, and apply a constant shader with that texture.</li>
+</ol>
+<p>You can also export your <code class="highlights">.custom_processing</code> file from the HDA.</p>
+
+<h4>Animated geometry</h4>
+<p>Same as static, but set the keyframe range for the desired number of frames. The maximum is currently 30 (configurable via <code class="highlights">MAX_GIF_FRAMES</code>). Animated geometry is converted to GIFs and laid out on the spritesheet.</p>
+<p><strong>Known limitation:</strong> if a GIF spans more than one spritesheet (e.g. 500 frames, sheet only fits 400), the overflow frames will glitch. Lower <code class="highlights">MAX_GIF_FRAMES</code> if this occurs.</p>
+
+<br>
+<br>
+
+<h2 id="customize">How do I customize my image stack?</h2>
+
+<br>
+<br>
+<p>Everything is controlled by two things: a per-folder <code class="highlights">.custom_processing</code> file, and the global defaults in <code class="highlights">file.py</code>. If no <code class="highlights">.custom_processing</code> is present, global defaults are used. You can place this file anywhere in a folder — next to images or in a subfolder.</p>
+
+
+
+<div class="config-block">
+	<div class="config-columns">
+		<div>
+			global defaults — these can be set in python only. if they are set they are considered the defualts. if you cont have a .custom_procesing file, then these settings will be applied. there are some gloabls vars that are exclusivly set here.
+			<br><br><br>
+			<div class="section-comment"># spritesheet</div>
+			<div class="var-row-global-unique">SPRITESHEET_SIZE=4096<div class="tooltip">Max pixel dimension of each spritesheet. All sprites are packed into sheets of this size. Larger = fewer sheets but bigger files.<div class="t-default">default: 4096</div></div></div>
+			<div class="var-row-global">SPRITE_SIZE=64<div class="tooltip">Size in pixels of each image on the spritesheet. All images are resized to this before packing. Higher = sharper but more memory and spritesheet space.<div class="t-default">default: 64</div></div></div>
+			<div class="var-row-global-unique">RESIZE_METHOD=Image.LANCZOS<div class="tooltip">Downscaling algorithm when resizing images to SPRITE_SIZE. LANCZOS is high-quality. Not user-facing — hardcoded.<br><br>• LANCZOS — highest quality downscaling, slowest<br>• BICUBIC — good quality, faster than LANCZOS<br>• BILINEAR — moderate quality, fast<br>• NEAREST — no interpolation, pixelated, fastest<br>• BOX — simple averaging, good for large downscales<br>• HAMMING — between BILINEAR and BICUBIC<div class="t-default">default: Image.LANCZOS</div></div></div>
+				<div class="var-row-global-unique">LABEL_SPRITE_SIZE=512<div class="tooltip">Sprite size specifically for text label images on spritesheets. Separate from SPRITE_SIZE so labels can be sharper. Overridden to 128 in low-res mode.<div class="t-default">default: 512</div></div></div>
+			<div class="section-comment"># LOD</div>
+			<div class="var-row-global-unique">LOD_TARGET_SPRITE_SIZES=[None, 32, 8]<div class="tooltip">Level of Detail tiers. LOD0 = original resolution, LOD1 = 32px per sprite, LOD2 = 8px. Viewer swaps to lower-res sheets when zoomed out to save GPU memory.<div class="t-default">default: [None, 32, 8]</div></div></div>
+			<div class="var-row-global-unique">LOD_VIEWHEIGHT_THRESHOLDS=[20, 40]<div class="tooltip">Camera viewHeight thresholds for LOD switching. Below 20 → LOD0. Below 40 → LOD1. Above 40 → LOD2.<div class="t-default">default: [20, 40]</div></div></div>
+			<div class="section-comment"># viewer</div>
+			<div class="var-row-global-unique">STACK_DIM_OPACITY=0.35<div class="tooltip">Opacity of non-active stacks when navigating into a folder. 0.0 = invisible, 1.0 = fully visible.<div class="t-default">default: 0.35</div></div></div>
+			<div class="var-row-global-unique">SEED=2922<div class="tooltip">Global seed for all deterministic randomness: colored HTML dots, random zoom values, random text/image div positioning.<div class="t-default">default: 2922</div></div></div>
+			<div class="var-row-global-unique">QUICKLOAD_THRESHOLD=100<div class="tooltip">Passed to viewer config but not currently used in JS. Reserved for a future loading strategy switch based on image count.<div class="t-default">default: 100</div></div></div>
+			<div class="var-row-global-unique">ORDERED_GRID_LAYOUT=True<div class="tooltip">When True, stacks are arranged in a grid using each node's grid_layout property (e.g. "3x2"). When False, layout is free-form.<div class="t-default">default: True</div></div></div>
+			<div class="var-row-global-unique">ROTATION_SPEED=0.000015<div class="tooltip">Auto-rotation speed of the entire 3D scene on the Y axis. Very small values = slow ambient rotation.<div class="t-default">default: 0.000015</div></div></div>
+			<div class="var-row-global-unique">RANDOM_ZOOM=False<div class="tooltip">When True, each page gets a random zoom level (0.1, 0.4, or 1.0) seeded by SEED. When False, uses ZOOM_VALUE. Per-node zoom always overrides both.<div class="t-default">default: False</div></div></div>
+			<div class="var-row-global">ZOOM_VALUE=0.4<div class="tooltip">Default camera zoom level. Smaller = more zoomed in, larger = more zoomed out.<div class="t-default">default: 0.4</div></div></div>
+			<div class="var-row-global-unique">RANDOM_TEXTDIV_POSITION=False<div class="tooltip">When True, left/right order of text and image divs is randomized per folder using SEED. When False, text is always left, images right.<div class="t-default">default: False</div></div></div>
+			<div class="var-row-global-unique">DIV_RATIO_HALF=False<div class="tooltip">With exactly 2 children (text + image) on desktop: False = asymmetric 40/60 split. True = 50/50.<div class="t-default">default: False</div></div></div>
+			<div class="var-row-global-unique">LOADINGSCREEN_IMG_INCREMENT=50<div class="tooltip">Passed to viewer config but not currently referenced in JS. Reserved for controlling images shown per loading screen update.<div class="t-default">default: 50</div></div></div>
+			<div class="var-row-global">STACK_SPACING=0.09<div class="tooltip">Vertical spacing between images within a stack. Calculated in Houdini export if used. Acts as a multiplier for vertical spread.<div class="t-default">default: 0.09</div></div></div>
+			<div class="section-comment"># labels</div>
+			<div class="var-row-global-unique">MAX_LABELS=200<div class="tooltip">Max stack labels visible at once in the 3D viewer. Labels closest to screen center get priority. Rest are hidden for performance.<div class="t-default">default: 200</div></div></div>
+			<div class="var-row-global-unique">SCREEN_BUFFER=100<div class="tooltip">Declared and passed to viewer but not actively used. Reserved for extending label visibility beyond screen edges.<div class="t-default">default: 100</div></div></div>
+			<div class="section-comment"># navigation</div>
+			<div class="var-row-global-unique">COLORED_HTML_DOTS=True<div class="tooltip">When True, dots next to folder names in the tree (representing HTML files) are colored based on path and SEED. When False, dots are white.<div class="t-default">default: True</div></div></div>
+			<div class="var-row-global-unique">BREADCRUMB_HTML_DOTS=False<div class="tooltip">When True, HTML propagation dots also appear in the breadcrumb bar. When False, dots only appear in the tree navigation.<div class="t-default">default: False</div></div></div>
+			<div class="var-row-global-unique">SHOW_NAV_ACCESSORIES=False<div class="tooltip">Master toggle for navigation decorations: dotfile indicators, HTML propagation dots in breadcrumbs, and other decorative nav elements.<div class="t-default">default: False</div></div></div>
+			<div class="var-row-global-unique">SUBMENU_CLOSE_DELAY=400<div class="tooltip">Milliseconds before closing a submenu when mouse leaves it. Higher = more forgiving hover, lower = snappier menus.<div class="t-default">default: 400</div></div></div>
+			<div class="var-row-global-unique">WIRE_STRAIGHT=False<div class="tooltip">Tree navigation wire style. False = curved paths (Houdini VOP-style). True = straight lines.<div class="t-default">default: False</div></div></div>
+			<div class="section-comment"># gif</div>
+			<div class="var-row-global">GIF_SPEED=0.6<div class="tooltip">Playback speed of GIF animations in the viewer. Can be set in Houdini export. 0.0 = slowest, 1.0 = fastest.<div class="t-default">default: 0.6</div></div></div>
+			<div class="var-row-global">MAX_GIF_FRAMES=30<div class="tooltip">Max frames to extract from GIF files. Each frame becomes a separate sprite. Excess frames are truncated. Frames split across sheets may cause visual glitches.<div class="t-default">default: 30</div></div></div>
+			<div class="section-comment"># folder label</div>
+			<div class="var-row-global">IMAGE_SETTINGS_LABELS=True<div class="tooltip">Whether to generate a text label image for this folder's stack. Shows folder name (or custom text) as a sprite at the top of the stack.<div class="t-default">default: True</div></div></div>
+			<div class="var-row-global">IMAGE_SETTINGS_CUSTOMTEXT=""<div class="tooltip">Custom text to display instead of the folder name. If empty string, falls back to the folder name.<div class="t-default">default: ""</div></div></div>
+			<div class="var-row-global">IMAGE_SETTINGS_COLOR='white'<div class="tooltip">Color of the label text. Accepts any valid PIL color name (e.g. 'white', 'black', 'red').<div class="t-default">default: 'white'</div></div></div>
+			<div class="var-row-global">IMAGE_SETTINGS_FONTSIZE=3<div class="tooltip">Relative font scale for the label. Not actual pixel size — automatically scaled based on TEXT_IMAGE_RESOLUTION.<div class="t-default">default: 3</div></div></div>
+			<div class="var-row-global">TEXT_IMAGE_RESOLUTION=256<div class="tooltip">Resolution in pixels of the generated text label image. Higher = sharper text but takes more spritesheet space.<div class="t-default">default: 256</div></div></div>
+			<div class="section-comment"># color to transparent</div>
+			<div class="var-row-global">COLOR_TO_TRANSPARENT='blue'<div class="tooltip">Removes a specific background color and replaces it with transparency. Options: 'black', 'white', 'red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'light_gray', 'dark_gray', 'orange', 'purple'.<div class="t-default">default: 'blue'</div></div></div>
+			<div class="var-row-global">COLOR_THRESHOLD=30<div class="tooltip">Strictness of color matching (0–255). 0 = exact match only. Higher = more aggressive removal, may eat into actual image content.<div class="t-default">default: 30</div></div></div>
+			<div class="section-comment"># image post processing</div>
+			<div class="var-row-global">SHARPEN=False<div class="tooltip">Applies unsharp mask sharpening after resizing. Useful to recover detail lost during downscaling to SPRITE_SIZE.<div class="t-default">default: False</div></div></div>
+			<div class="var-row-global">SHARPEN_RADIUS=1<div class="tooltip">How many surrounding pixels are considered for sharpening. Higher = broader area, more pronounced effect.<div class="t-default">default: 1</div></div></div>
+			<div class="var-row-global">SHARPEN_PERCENT=20<div class="tooltip">Strength of sharpening as a percentage. 0 = none, 100 = moderate, 500 = extreme.<div class="t-default">default: 20</div></div></div>
+			<div class="var-row-global">SHARPEN_THRESHOLD=3<div class="tooltip">Minimum brightness difference (0–255) before sharpening is applied. Prevents sharpening of subtle gradients/noise.<div class="t-default">default: 3</div></div></div>
+			<div class="var-row-global">GAUSSIAN_BLUR=False<div class="tooltip">Applies Gaussian blur to each image. Useful for softening harsh edges or depth-of-field style effects.<div class="t-default">default: False</div></div></div>
+			<div class="var-row-global">GAUSSIAN_BLUR_RADIUS=2<div class="tooltip">Radius of the blur kernel. Higher = more blurry. Can be a decimal (e.g. 0.5 for very subtle blur).<div class="t-default">default: 2</div></div></div>
+			<div class="section-comment"># dithering</div>
+			<div class="var-row-global">DITHERING=False<div class="tooltip">Reduces the color palette of each image using dithering patterns.<div class="t-default">default: False</div></div></div>
+			<div class="var-row-global">DITHER_MODE='custom_palette'<div class="tooltip">Dithering strategy. 'bw' = black and white only. 'color_reduce' = reduce to DITHER_COLORS colors. 'custom_palette' = map to closest in CUSTOM_PALETTE.<div class="t-default">default: 'custom_palette'</div></div></div>
+			<div class="var-row-global">DITHER_METHOD='ordered'<div class="tooltip">Algorithm for distributing quantization error. 'floyd_steinberg' = smooth diffusion. 'ordered' = geometric/retro grid. 'none' = hard color snapping.<div class="t-default">default: 'ordered'</div></div></div>
+			<div class="var-row-global">DITHER_COLORS=256<div class="tooltip">Number of colors to reduce to when DITHER_MODE='color_reduce'. Ignored for 'bw' and 'custom_palette'. Range: 2–256.<div class="t-default">default: 256</div></div></div>
+			<div class="var-row-global">CUSTOM_PALETTE=['#000000', '#FF0000', '#00FF00']<div class="tooltip">Hex colors to map to when DITHER_MODE='custom_palette'. Every pixel maps to the nearest color in this list. Ignored for 'bw' and 'color_reduce'.<div class="t-default">default: ['#000000', '#FF0000', '#00FF00']</div></div></div>
+			<div class="section-comment"># image</div>
+			<div class="var-row-global">SQUARE_IMAGES=True<div class="tooltip">When True, rectangular images are padded to square aspect ratio before spritesheet placement. When False, original aspect ratio is preserved.<div class="t-default">default: True</div></div></div>
+		</div>
+		<div>
+			.custom_processing — per-folder override. these are al the possible ovverides. you can place this .custom_processing file in any folder or next to any image. it will override the global parameters set in the python file.
+			<br><br><br>
+			<div class="section-comment"># sprite</div>
+			<div class="var-row-custom">SPRITE_SIZE=256<div class="tooltip">Size in pixels of each image on the spritesheet. All images are resized to this before packing. Higher = sharper but more memory and spritesheet space.<div class="t-default">default: 256</div></div></div>
+			<div class="var-row-custom">RESIZE_METHOD=Image.LANCZOS<div class="tooltip">Downscaling algorithm when resizing images to SPRITE_SIZE. LANCZOS is high-quality. Not user-facing — hardcoded.<br><br>• LANCZOS — highest quality downscaling, slowest<br>• BICUBIC — good quality, faster than LANCZOS<br>• BILINEAR — moderate quality, fast<br>• NEAREST — no interpolation, pixelated, fastest<br>• BOX — simple averaging, good for large downscales<br>• HAMMING — between BILINEAR and BICUBIC<div class="t-default">default: Image.LANCZOS</div></div></div>
+			<div class="section-comment"># viewer</div>
+			<div class="var-row-custom">STACK_SPACING=0.09<div class="tooltip">Vertical spacing between images within a stack. Calculated in Houdini export if used. Acts as a multiplier for vertical spread.<div class="t-default">default: 0.09</div></div></div>
+			<div class="var-row-custom">ZOOM_VALUE=0.4<div class="tooltip">Default camera zoom level. Smaller = more zoomed in, larger = more zoomed out.<div class="t-default">default: 0.4</div></div></div>
+			<div class="section-comment"># gif</div>
+			<div class="var-row-custom">GIF_SPEED=0.6<div class="tooltip">Playback speed of GIF animations in the viewer. Can be set in Houdini export. 0.0 = slowest, 1.0 = fastest.<div class="t-default">default: 0.6</div></div></div>
+			<div class="var-row-custom">MAX_GIF_FRAMES=30<div class="tooltip">Max frames to extract from GIF files. Each frame becomes a separate sprite. Excess frames are truncated. Frames split across sheets may cause visual glitches.<div class="t-default">default: 30</div></div></div>
+			<div class="section-comment"># folder label</div>
+			<div class="var-row-custom">IMAGE_SETTINGS_LABELS=True<div class="tooltip">Whether to generate a text label image for this folder's stack. Shows folder name (or custom text) as a sprite at the top of the stack.<div class="t-default">default: True</div></div></div>
+			<div class="var-row-custom">IMAGE_SETTINGS_CUSTOMTEXT=""<div class="tooltip">Custom text to display instead of the folder name. If empty string, falls back to the folder name.<div class="t-default">default: ""</div></div></div>
+			<div class="var-row-custom">IMAGE_SETTINGS_COLOR='white'<div class="tooltip">Color of the label text. Accepts any valid PIL color name (e.g. 'white', 'black', 'red').<div class="t-default">default: 'white'</div></div></div>
+			<div class="var-row-custom">IMAGE_SETTINGS_FONTSIZE=3<div class="tooltip">Relative font scale for the label. Not actual pixel size — automatically scaled based on TEXT_IMAGE_RESOLUTION.<div class="t-default">default: 3</div></div></div>
+			<div class="var-row-custom">TEXT_IMAGE_RESOLUTION=256<div class="tooltip">Resolution in pixels of the generated text label image. Higher = sharper text but takes more spritesheet space.<div class="t-default">default: 256</div></div></div>
+			<div class="section-comment"># color to transparent</div>
+			<div class="var-row-custom">COLOR_TO_TRANSPARENT='blue'<div class="tooltip">Removes a specific background color and replaces it with transparency. Options: 'black', 'white', 'red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'light_gray', 'dark_gray', 'orange', 'purple'.<div class="t-default">default: 'blue'</div></div></div>
+			<div class="var-row-custom">COLOR_THRESHOLD=30<div class="tooltip">Strictness of color matching (0–255). 0 = exact match only. Higher = more aggressive removal, may eat into actual image content.<div class="t-default">default: 30</div></div></div>
+			<div class="section-comment"># image post processing</div>
+			<div class="var-row-custom">SHARPEN=False<div class="tooltip">Applies unsharp mask sharpening after resizing. Useful to recover detail lost during downscaling to SPRITE_SIZE.<div class="t-default">default: False</div></div></div>
+			<div class="var-row-custom">SHARPEN_RADIUS=1<div class="tooltip">How many surrounding pixels are considered for sharpening. Higher = broader area, more pronounced effect.<div class="t-default">default: 1</div></div></div>
+			<div class="var-row-custom">SHARPEN_PERCENT=20<div class="tooltip">Strength of sharpening as a percentage. 0 = none, 100 = moderate, 500 = extreme.<div class="t-default">default: 20</div></div></div>
+			<div class="var-row-custom">SHARPEN_THRESHOLD=3<div class="tooltip">Minimum brightness difference (0–255) before sharpening is applied. Prevents sharpening of subtle gradients/noise.<div class="t-default">default: 3</div></div></div>
+			<div class="var-row-custom">GAUSSIAN_BLUR=False<div class="tooltip">Applies Gaussian blur to each image. Useful for softening harsh edges or depth-of-field style effects.<div class="t-default">default: False</div></div></div>
+			<div class="var-row-custom">GAUSSIAN_BLUR_RADIUS=2<div class="tooltip">Radius of the blur kernel. Higher = more blurry. Can be a decimal (e.g. 0.5 for very subtle blur).<div class="t-default">default: 2</div></div></div>
+			<div class="section-comment"># dithering</div>
+			<div class="var-row-custom">DITHERING=False<div class="tooltip">Reduces the color palette of each image using dithering patterns.<div class="t-default">default: False</div></div></div>
+			<div class="var-row-custom">DITHER_MODE='custom_palette'<div class="tooltip">Dithering strategy. 'bw' = black and white only. 'color_reduce' = reduce to DITHER_COLORS colors. 'custom_palette' = map to closest in CUSTOM_PALETTE.<div class="t-default">default: 'custom_palette'</div></div></div>
+			<div class="var-row-custom">DITHER_METHOD='ordered'<div class="tooltip">Algorithm for distributing quantization error. 'floyd_steinberg' = smooth diffusion. 'ordered' = geometric/retro grid. 'none' = hard color snapping.<div class="t-default">default: 'ordered'</div></div></div>
+			<div class="var-row-custom">DITHER_COLORS=256<div class="tooltip">Number of colors to reduce to when DITHER_MODE='color_reduce'. Ignored for 'bw' and 'custom_palette'. Range: 2–256.<div class="t-default">default: 256</div></div></div>
+			<div class="var-row-custom">CUSTOM_PALETTE=['#000000', '#FF0000', '#00FF00']<div class="tooltip">Hex colors to map to when DITHER_MODE='custom_palette'. Every pixel maps to the nearest color in this list. Ignored for 'bw' and 'color_reduce'.<div class="t-default">default: ['#000000', '#FF0000', '#00FF00']</div></div></div>
+			<div class="section-comment"># image</div>
+			<div class="var-row-custom">SQUARE_IMAGES=True<div class="tooltip">When True, rectangular images are padded to square aspect ratio before spritesheet placement. When False, original aspect ratio is preserved.<div class="t-default">default: True</div></div></div>
+		</div>
+	</div>
+
+			<br><br><br>
+	<div class="config-fullwidth">
+		<p>these are all possibilities. realistically you would not adjust all of them. it is highly recommended to use this one, and comment out the ones that are not relevant</p>
+
+			<br><br><br>
+		<div class="var-row-standard">SPRITE_SIZE = 256</div>
+		<div class="var-row-standard">STACK_SPACING = 0.0787</div>
+		<div class="var-row-standard">ZOOM_VALUE = 0.5</div>
+		<div class="var-row-standard">GIF_SPEED = 0.775</div>
+		<div class="var-row-standard">IMAGE_SETTINGS_CUSTOMTEXT = "hello"</div>
+		<div class="var-row-standard">IMAGE_SETTINGS_COLOR = 'green'</div>
+		<div class="var-row-standard">COLOR_TO_TRANSPARENT = 'light_gray'</div>
+		<div class="var-row-standard">COLOR_THRESHOLD = 60</div>
+		<div class="var-row-standard-commented"># SHARPEN = True</div>
+		<div class="var-row-standard-commented"># SHARPEN_RADIUS = 2</div>
+		<div class="var-row-standard-commented"># SHARPEN_PERCENT = 100</div>
+		<div class="var-row-standard-commented"># SHARPEN_THRESHOLD = 3</div>
+		<div class="var-row-standard-commented"># GAUSSIAN_BLUR = False</div>
+		<div class="var-row-standard-commented"># GAUSSIAN_BLUR_RADIUS = 2</div>
+		<div class="var-row-standard-commented"># DITHERING = True</div>
+		<div class="var-row-standard-commented"># DITHER_MODE = 'custom_palette'</div>
+		<div class="var-row-standard-commented"># DITHER_METHOD = 'ordered'</div>
+		<div class="var-row-standard-commented"># DITHER_COLORS = 256</div>
+		<div class="var-row-standard-commented"># CUSTOM_PALETTE = ['#000000', '#FF0000', '#00FF00']</div>
+		<div class="var-row-standard-commented"># MAX_GIF_FRAMES = 30</div>
+		<div class="var-row-standard-commented"># IMAGE_SETTINGS_LABELS = False</div>
+		<div class="var-row-standard-commented"># TEXT_IMAGE_RESOLUTION = 512</div>
+		<div class="var-row-standard-commented"># SQUARE_IMAGES = True</div>
+	</div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+<h2 id="forbidden_names">Are there folder names I cannot use?</h2>
+
+<br>
+<br>
+<p>When adding website content, do not name your folders any of the following, as they will not be processed.</p>
+<p>This also means you can use these names for working directories — files inside them will be ignored. Using a <code class="highlights">geo</code> directory is recommended for saving out models or other extra files.</p>
+<p><code class="highlights">venv</code>, <code class="highlights">__pycache__</code>, <code class="highlights">.git</code>, <code class="highlights">fonts</code>, <code class="highlights">spritesheets</code>, <code class="highlights">images</code>, <code class="highlights">backup</code>, <code class="highlights">geo</code></p>
+
+<br>
+<br>
+<h2 id="keywords">How to add keywords to folders and files?</h2>
+
+<br>
+<br>
+<p>You can add a <code class="highlights">.keywords</code> file to any folder or next to any image or text file. Most of the time you would add contact keywords so that when clicked, the user is taken to the about page.</p>
+
+<pre>
+project
+green
+eco
+email
+</pre>
+
+<br>
+<br>
+
+<h2 id="deploy">How do I deploy my stack?</h2>
+
+<br>
+<br>
+
+<div>
+<p>It is highly recommended to first test on a copy of the website that contains only demo projects.</p>
+<br>
+<br>
+<p>Before publishing, test your stack locally to make sure it renders as expected. You can set the global variable</p>
+
+<div style="color: blue;">PROCESS_IMG_LOWRES=True #True for lowres, False for original</div>
+
+<p>in the global vars section of the Python file for faster processing. You can also set the resolution below it:</p>
+
+<br>
+<br>
+
+<pre style="color: blue;">
+if PROCESS_IMG_LOWRES:
+    DEFAULTS['SPRITE_SIZE'] = 32
+    DEFAULTS['LABEL_SPRITE_SIZE'] = 32
+</pre>
+
+<br>
+<br>
+<p>This is also useful if you want all spritesheets at the same resolution.</p>
+<p>Once testing is done, copy your folder into the final website.</p>
+
+<br>
+<br>
+</div>
+
+<br>
+<br>
+<br>
+<br>
+
+<h2 id="future">What are some future plans?</h2>
+
+<br>
+<br>
+
+<div>
+<li>Add global variable <code class="highlights">REVERSE_STACK=True/False</code> to quickly change the direction of a stack's images.</li>
+<li>Turn the Houdini file into an HDA.</li>
+<li>Displacement settings per image — would make geometry 3D and closed, requires an additional spritesheet and more loading time.</li>
+<li>Agents doing A* pathfinding on the stacks, with perspective camera highlighting.</li>
+<li>Bug: large pieces of text are displayed too far above — they should all start from the same horizontal baseline.</li>
+<li>Colored dots for HTML indication are unclear. Blue for <code class="highlights">.html_stops_here</code> and green for <code class="highlights">.html_only_here</code> are not good indicators when colored dots are enabled. A different shape or animation may help.</li>
+<li>The "turn off labels" blue circle looks the same as the blue HTML dots — this should not be the case.</li>
+<li>The <code class="highlights">submenu_close_delay</code> global variable does not appear to be working — needs to be fixed.</li>
+<li>Support array entries for <code class="highlights">COLOR_TO_TRANSPARENT</code> so more than one color can be made transparent — currently limited to one. also array entries for treshold vars</li>
+<li>Add a legend to the tree viewer so it is clear what the blue and green dots (<code class="highlights">.html_only_here</code> and <code class="highlights">.html_stops_here</code>) mean.</li>
+<li>Wire nav system styling: the background is not rounded while the foreground is. The border color (blue, gray, or white) should also be consistent.</li>
+<li>back and forth buttons on desktop need a makeover.</li>
+</div>
+
+<br>
+<br>
+</div>
+</div>
+
+
+
+
+
+
+<script>
+
+const tooltipMap = {};
+document.querySelectorAll('.var-row-global, .var-row-global-unique, .var-row-custom').forEach(row => {
+    const tooltip = row.querySelector('.tooltip');
+    if (!tooltip) return;
+    const key = row.childNodes[0].textContent.split('=')[0].trim();
+    tooltipMap[key] = tooltip.innerHTML;
+});
+
+document.querySelectorAll('.var-row-standard, .var-row-standard-commented').forEach(row => {
+    const key = row.textContent.replace(/^#\s*/, '').split('=')[0].trim();
+    if (!tooltipMap[key]) return;
+    const t = document.createElement('div');
+    t.className = 'tooltip';
+    t.innerHTML = tooltipMap[key];
+    row.appendChild(t);
+});
+
+document.querySelectorAll('.tooltip').forEach(tooltip => {
+    const row = tooltip.parentElement;
+    const key = row.childNodes[0].textContent.replace(/^#\s*/, '').split('=')[0].trim();
+    const img = document.createElement('img');
+    img.src = './images/tooltip_images/' + key + '.png';
+    tooltip.insertBefore(img, tooltip.querySelector('.t-default'));
+});
+
+
+
+
+
+document.addEventListener('DOMContentLoaded', function() {
+  function esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  document.querySelectorAll('pre').forEach(function(pre) {
+    var t = pre.textContent;
+
+    if (t.includes(':root') || t.includes('--font')) {
+      var h = esc(t);
+      h = h.replace(/(--[\w-]+)/g, '<span class="hl-css-k">$1</span>');
+      h = h.replace(/(:[ \t]*)([^;\n]+)/g, function(_, colon, val) {
+        return colon + '<span class="hl-css-v">' + val + '</span>';
+      });
+      pre.innerHTML = h;
+      return;
+    }
+
+    if (!t.includes('<')) return;
+
+    // script body
+    t = t.replace(/(<script>)([\s\S]*?)(<\/script>)/g, function(_, o, body, c) {
+      return '\x00OPEN\x00' + o + '\x00/OPEN\x00'
+           + '\x00JS\x00' + body + '\x00/JS\x00'
+           + '\x00OPEN\x00' + c + '\x00/OPEN\x00';
+    });
+
+    // tags with attrs
+    t = t.replace(/(<\/?)(\w+)([\s\S]*?)(\/?>)/g, function(_, open, tag, attrs, close) {
+      var styledAttrs = attrs.replace(/([\w-]+)(=)("([^"]*)"|'([^']*)')/g,
+        '\x00ATTR\x00$1\x00/ATTR\x00$2\x00VAL\x00$3\x00/VAL\x00');
+      return '\x00OPEN\x00' + open + tag + '\x00/OPEN\x00'
+           + styledAttrs
+           + '\x00OPEN\x00' + close + '\x00/OPEN\x00';
+    });
+
+    // escape then replace markers with spans
+    var h = esc(t);
+    h = h.replace(/\x00OPEN\x00([\s\S]*?)\x00\/OPEN\x00/g, '<span class="hl-tag">$1</span>');
+    h = h.replace(/\x00JS\x00([\s\S]*?)\x00\/JS\x00/g,   '<span class="hl-js">$1</span>');
+    h = h.replace(/\x00ATTR\x00([\s\S]*?)\x00\/ATTR\x00/g,'<span class="hl-attr">$1</span>');
+    h = h.replace(/\x00VAL\x00([\s\S]*?)\x00\/VAL\x00/g,  '<span class="hl-val">$1</span>');
+
+    pre.innerHTML = h;
+  });
+});
+
+
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
