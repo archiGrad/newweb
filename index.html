@@ -13,10 +13,16 @@
 <div id="tree">
     <div id="tree-toolbar" style="display:flex;align-items:center;margin-bottom:6px;">
         <input id="tree-search" type="text" placeholder="search..." />
-        <span id="tree-history-toggle">&lt;&lt;</span>
+        <span id="nav-back">&lt;</span>
+        <span id="nav-fwd">&gt;</span>
+        <span id="tree-expand-all">+</span>
     </div>
     <div id="tree-content"></div>
-    <div id="tree-history" style="display:none;"></div>
+    <div id="tree-legend">
+        <span><span style="color:#4f4;">●</span> text_stop</span>
+        <span><span style="color:#f44;">●</span> text_hard_stop</span>
+        <span><span style="color:#fff;">●</span> text page</span>
+    </div>
 </div>
 <div id="content"></div>
 <script type="importmap">
@@ -41,32 +47,34 @@ THREE.ColorManagement.enabled = false;
     const searchInput = document.getElementById('tree-search');
     let dragging = false, ox = 0, oy = 0, tabIndex = -1, visibleMatches = [];
 
-    const historyToggle = document.getElementById('tree-history-toggle');
-    const historyPanel = document.getElementById('tree-history');
-    let historyOpen = false;
-    historyToggle.onclick = (e) => {
-        e.stopPropagation();
-        if (!historyOpen) {
-            tree.style.width = tree.offsetWidth + 'px';
-        } else {
-            tree.style.width = 'max-content';
-        }
-        historyOpen = !historyOpen;
-        historyPanel.style.display = historyOpen ? 'block' : 'none';
-        historyToggle.style.color = historyOpen ? '#44f' : '#888';
-    };
+    const navBack = document.getElementById('nav-back');
+    const navFwd = document.getElementById('nav-fwd');
 
-    historyPanel.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.history-item, #tree-history-toggle')) return;
-        dragging = true; ox = e.clientX - tree.offsetLeft; oy = e.clientY - tree.offsetTop;
-        tree.style.cursor = 'grabbing'; document.body.style.userSelect = 'none';
-    });
+    navBack.onclick = (e) => { e.stopPropagation(); navigateHistory(-1); };
+    navFwd.onclick = (e) => { e.stopPropagation(); navigateHistory(1); };
+
+    const expandAllBtn = document.getElementById('tree-expand-all');
+    let treeExpanded = false;
+    expandAllBtn.onclick = (e) => {
+        e.stopPropagation();
+        treeExpanded = !treeExpanded;
+        expandAllBtn.textContent = treeExpanded ? '-' : '+';
+        document.querySelectorAll('.tree-link').forEach(link => {
+            const cc = link._childContainer;
+            if (cc) cc.style.display = treeExpanded ? 'block' : 'none';
+        });
+        document.querySelectorAll('.tree-caret').forEach(caret => {
+            const link = caret.closest('.tree-link');
+            const cc = link?._childContainer;
+            if (cc) caret.textContent = treeExpanded ? 'v' : '>';
+        });
+    };
 
     tree.style.left = Math.floor(Math.random() * Math.max(0, innerWidth - 300)) + 'px';
     tree.style.top = Math.floor(Math.random() * Math.max(0, innerHeight - 400)) + 'px';
 
     tree.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.tree-link, #tree-search, #tree-history-toggle, .history-item')) return;
+        if (e.target.closest('.tree-link, #tree-search, #nav-back, #nav-fwd, #tree-expand-all')) return;
         dragging = true; ox = e.clientX - tree.offsetLeft; oy = e.clientY - tree.offsetTop;
         tree.style.cursor = 'grabbing'; document.body.style.userSelect = 'none';
     });
@@ -280,10 +288,10 @@ function dotSpan(color, cls) {
 function navDeco(node, cls, showHtmlDots) {
     if (!node) return '';
     let d = '';
-    if (node.na) d += ' ' + dotSpan('#44f', cls);
-    if (node.sa) d += ' ' + dotSpan('#4f4', cls);
+    if (node.na) d += ' ' + dotSpan('#4f4', cls);
+    if (node.sa) d += ' ' + dotSpan('#f44', cls);
     if (showHtmlDots !== false && node.at && node.at.length > 0) d += ' ' + buildHtmlDots(node.at, cls);
-    if (node._dc > 0) d += `<span class="nav-count">(${node._dc})</span>`;
+    if (node._dc > 0) d += ` <span class="nav-count">(${node._dc})</span>`;
     return d;
 }
 
@@ -671,6 +679,7 @@ async function createThreeScene(container, images, node, highlightPath) {
 
     const SPRITESHEET_SIZE = spriteConfig.spritesheet_size;
     const STACK_SPACING = spriteConfig.stack_spacing;
+    const STACK_REVERSE = spriteConfig.stack_reverse;
     const STACK_DIM_OPACITY = spriteConfig.stack_dim_opacity;
     const SEED = spriteConfig.seed;
     const ORDERED_GRID_LAYOUT = spriteConfig.ordered_grid_layout;
@@ -944,16 +953,16 @@ async function createThreeScene(container, images, node, highlightPath) {
     });
 
  
-    const toggleBtn = document.createElement('button');
+    const toggleBtn = document.createElement('span');
     toggleBtn.id = 'label-toggle';
-          
-    toggleBtn.style.cssText = 'position:absolute;bottom:5px;left:5px;background:#44f;border:none;width:0.7em;height:0.7em;border-radius:50%;cursor:pointer;padding:0;z-index:100;font-size:var(--font-ui, 11px)';
+    toggleBtn.textContent = 'hide labels';
+    toggleBtn.style.cssText = 'position:absolute;bottom:5px;left:5px;color:#444;font-family:monospace;font-size:11px;cursor:pointer;z-index:100;user-select:none;';
     let labelsVisible = true;
     toggleBtn.onclick = () => {
         labelsVisible = !labelsVisible;
         labelContainer.style.display = labelsVisible ? 'block' : 'none';
         wireSvg.style.display = labelsVisible ? '' : 'none';
-        toggleBtn.style.background = labelsVisible ? '#44f' : '#f44';
+        toggleBtn.textContent = labelsVisible ? 'hide labels' : 'show labels';
     };
     container.appendChild(toggleBtn);
 
@@ -1034,6 +1043,7 @@ const updateCount = () => {
             // --- NEW: Retrieve Custom Spacing for this specific stack ---
             const folderNode = findNodeByPath(dataTree, folderName);
             const localSpacing = (folderNode && folderNode.msp != null) ? folderNode.msp : STACK_SPACING;
+            const localReverse = (folderNode && folderNode.mrv != null) ? folderNode.mrv : STACK_REVERSE;
             // ------------------------------------------------------------
 
 
@@ -1054,7 +1064,7 @@ const updateCount = () => {
                 const height = 1;
                 const width = height * aspect;
 
-                const y = i * localSpacing;
+                const y = localReverse ? (stackImages.length - 1 - i) * localSpacing : i * localSpacing;
                 const matrix = new THREE.Matrix4();
                 const position = new THREE.Vector3(xPos, y, zPos);
                 const rotation = new THREE.Euler(Math.PI / 2, Math.PI, Math.PI);
@@ -1191,7 +1201,7 @@ const updateCount = () => {
 
         // Create spatial labels from recursive tree
         const scenePath = node.path || '';
-        let hoverDimTimeout = null;
+
 
         function applyDimming(targetPath) {
             for (const [folder, data] of Object.entries(stackGroups)) {
@@ -1246,7 +1256,6 @@ const updateCount = () => {
         let treeDrivenNav = false;
 
         function resetNav() {
-            clearTimeout(hoverDimTimeout);
             treeDrivenNav = false;
             clearNav();
             clearDimming();
@@ -1262,7 +1271,6 @@ const updateCount = () => {
 
         sceneData.driveWireNav = function(targetPath) {
             if (currentFocusedParent || mouseIsDown) return;
-            clearTimeout(hoverDimTimeout);
             treeDrivenNav = true;
             const group = stackLabels.find(sl => sl.isGroup && (targetPath === sl.folderName || targetPath.startsWith(sl.folderName + '/')));
             if (!group) return;
@@ -1272,10 +1280,8 @@ const updateCount = () => {
         };
 
         sceneData.clearWireNav = function() {
-            hoverDimTimeout = setTimeout(() => {
-                if (currentFocusedParent) return;
-                resetNav();
-            }, spriteConfig.submenu_close_delay);
+            if (currentFocusedParent) return;
+            resetNav();
         };
 
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') resetAll(); });
@@ -1285,7 +1291,7 @@ const updateCount = () => {
         container.addEventListener('click', (e) => {
             if (!_ptrDown) return;
             const dx = e.clientX - _ptrDown.x, dy = e.clientY - _ptrDown.y;
-            if (dx * dx + dy * dy > 25 || e.target.closest('.stack-label, .div-nav, button')) return;
+            if (dx * dx + dy * dy > 25 || e.target.closest('.stack-label, .div-nav, button, #label-toggle')) return;
             resetAll();
         });
 
@@ -1327,7 +1333,9 @@ const updateCount = () => {
             const el = document.createElement('span');
             el.className = 'stack-label' + (isGroup ? '' : ' nav-child-label');
             el.dataset.folderName = path;
-            const colorStyle = path === highlightPath ? 'color:#44f;' : '';
+            const isHighlight = path === highlightPath;
+            const colorStyle = isHighlight ? 'color:#44f;' : '';
+            if (isHighlight) el.style.borderColor = '#44f';
             el.innerHTML = `<span style="padding:2px 4px;cursor:pointer;${colorStyle}" data-path="${path}">${name}</span>`;
             el.addEventListener('wheel', (e) => { e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }, { passive: false });
             labelContainer.appendChild(el);
@@ -1336,7 +1344,6 @@ const updateCount = () => {
             stackLabels.push(entry);
 
             el.addEventListener('mouseenter', () => {
-                clearTimeout(hoverDimTimeout);
                 if (currentFocusedParent || mouseIsDown) return;
                 treeDrivenNav = false;
                 activeGroupPath = rootGroupPath;
@@ -1345,11 +1352,9 @@ const updateCount = () => {
                 highlightTreePath(path);
             });
             el.addEventListener('mouseleave', () => {
-                hoverDimTimeout = setTimeout(() => {
-                    if (currentFocusedParent) return;
-                    if (activeGroupPath === rootGroupPath) return;
-                    resetNav();
-                }, spriteConfig.submenu_close_delay);
+                if (currentFocusedParent) return;
+                if (activeGroupPath === rootGroupPath) return;
+                resetNav();
             });
 
             el.querySelector('span[data-path]').onclick = (e) => {
@@ -1388,18 +1393,16 @@ const updateCount = () => {
                 aEl.className = 'stack-label nav-ancestor-label';
                 aEl.dataset.folderName = aPath;
                 const aColor = aPath === highlightPath ? '#44f' : '#888';
+                aEl.style.borderColor = aColor;
                 aEl.innerHTML = `<span style="padding:2px 4px;cursor:pointer;color:${aColor}" data-path="${aPath}">${aName}</span>`;
                 aEl.addEventListener('wheel', (e) => { e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }, { passive: false });
                 labelContainer.appendChild(aEl);
                 aEl.addEventListener('mouseenter', () => {
-                    clearTimeout(hoverDimTimeout);
                     highlightTreePath(aPath);
                 });
                 aEl.addEventListener('mouseleave', () => {
-                    hoverDimTimeout = setTimeout(() => {
-                        if (currentFocusedParent) return;
-                        resetNav();
-                    }, spriteConfig.submenu_close_delay);
+                    if (currentFocusedParent) return;
+                    clearTreeHighlight();
                 });
                 aEl.querySelector('span[data-path]').onclick = (e) => {
                     e.stopPropagation();
@@ -1797,51 +1800,47 @@ function updateURL(node) {
 
 const NAV_HISTORY_MAX = 20;
 const navHistory = [];
+let navHistoryIndex = -1;
+let navIsTraversing = false;
 
 function recordHistory(node) {
     const entry = { path: node.path, name: node.name || node.path };
-    const last = navHistory[navHistory.length - 1];
-    if (last && last.path === entry.path) return;
+    if (navHistoryIndex >= 0 && navHistory[navHistoryIndex] && navHistory[navHistoryIndex].path === entry.path) return;
+    if (navHistoryIndex < navHistory.length - 1) navHistory.splice(navHistoryIndex + 1);
     navHistory.push(entry);
     if (navHistory.length > NAV_HISTORY_MAX) navHistory.shift();
-    updateHistoryDiv();
+    navHistoryIndex = navHistory.length - 1;
+    updateNavButtons();
 }
 
-function updateHistoryDiv() {
-    const el = document.getElementById('tree-history');
-    const frag = document.createDocumentFragment();
-    const label = document.createElement('span');
-    label.className = 'history-label';
-    label.textContent = 'history:';
-    frag.appendChild(label);
-    frag.appendChild(document.createElement('br'));
-    for (let i = navHistory.length - 1; i >= 0; i--) {
-        const h = navHistory[i];
-        const num = navHistory.length - i;
-        const sep = document.createElement('span');
-        sep.className = 'history-sep';
-        sep.textContent = '>';
-        frag.appendChild(sep);
-        const item = document.createElement('span');
-        item.className = 'history-item';
-        item.innerHTML = `<span class="history-num">${num}</span>${h.name}`;
-        item.title = h.path;
-        item.onclick = (e) => {
-            e.stopPropagation();
-            const node = findNodeByPath(dataTree, h.path);
-            if (node) renderContent(node);
-        };
-        frag.appendChild(item);
-        frag.appendChild(document.createTextNode(' '));
+function navigateHistory(dir) {
+    const idx = navHistoryIndex + dir;
+    if (idx < 0 || idx >= navHistory.length) return;
+    navHistoryIndex = idx;
+    updateNavButtons();
+    const h = navHistory[navHistoryIndex];
+    const node = findNodeByPath(dataTree, h.path);
+    if (node) {
+        navIsTraversing = true;
+        renderContent(node);
     }
-    el.innerHTML = '';
-    el.appendChild(frag);
+}
+
+function updateNavButtons() {
+    const back = document.getElementById('nav-back');
+    const fwd = document.getElementById('nav-fwd');
+    back.style.color = navHistoryIndex > 0 ? '#fff' : '#333';
+    fwd.style.color = navHistoryIndex < navHistory.length - 1 ? '#fff' : '#333';
 }
 
 async function renderContent(node, page) {
     if (page === undefined) {
         if (!isInitialLoad && (!currentNode || currentNode.path !== node.path)) {
-            recordHistory(node);
+            if (navIsTraversing) { navIsTraversing = false; }
+            else {
+                if (navHistory.length === 0 && currentNode) recordHistory(currentNode);
+                recordHistory(node);
+            }
         }
         if (!isInitialLoad) updateURL(node);
         updateURL(node);

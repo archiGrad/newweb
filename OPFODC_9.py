@@ -26,8 +26,7 @@ DEFAULTS = {
     'GAUSSIAN_BLUR': False,
     'GAUSSIAN_BLUR_RADIUS': 2,
     
-    'COLOR_TO_TRANSPARENT': 'blue',
-    'COLOR_THRESHOLD': 0,
+    'COLOR_TO_TRANSPARENT': [('blue', 0),('green', 0,)],
 
     'DITHERING': False,
     'DITHER_MODE': 'custom_palette',
@@ -54,6 +53,7 @@ DEFAULTS = {
    
     # Viewer Config
     'STACK_SPACING': 0.09,
+    'STACK_REVERSE': False,
     'STACK_DIM_OPACITY': 0.2, 
     'SEED': -1000000000000,
     'QUICKLOAD_THRESHOLD': 100,
@@ -71,7 +71,7 @@ DEFAULTS = {
     'COLORED_HTML_DOTS': False,
     'BREADCRUMB_HTML_DOTS': True,
     'SHOW_NAV_ACCESSORIES': True,
-    'SUBMENU_CLOSE_DELAY': 400,
+
     'WIRE_STRAIGHT': False
 
 }
@@ -143,25 +143,23 @@ def apply_filter(img, conf):
         img = img.filter(ImageFilter.GaussianBlur(radius=conf['GAUSSIAN_BLUR_RADIUS']))
     
     if conf['COLOR_TO_TRANSPARENT']:
-        colors = {
+        color_map = {
             'black': (0, 0, 0), 'white': (255, 255, 255), 'red': (255, 0, 0),
             'green': (0, 255, 0), 'blue': (0, 0, 255), 'yellow': (255, 255, 0),
             'cyan': (0, 255, 255), 'magenta': (255, 0, 255), 'light_gray': (192, 192, 192),
             'dark_gray': (64, 64, 64), 'orange': (255, 165, 0), 'purple': (128, 0, 128)
         }
-        target = conf['COLOR_TO_TRANSPARENT']
-        if target in colors:
-            target_r, target_g, target_b = colors[target]
+        targets = [(color_map[c], t) for c, t in conf['COLOR_TO_TRANSPARENT'] if c in color_map]
+        if targets:
             img = img.convert('RGBA')
             pixels = img.load()
-            thresh = conf['COLOR_THRESHOLD']
             for y in range(img.height):
                 for x in range(img.width):
                     r, g, b, a = pixels[x, y]
-                    if (abs(r - target_r) < thresh and 
-                        abs(g - target_g) < thresh and 
-                        abs(b - target_b) < thresh):
-                        pixels[x, y] = (r, g, b, 0)
+                    for (tr, tg, tb), thresh in targets:
+                        if abs(r - tr) < thresh and abs(g - tg) < thresh and abs(b - tb) < thresh:
+                            pixels[x, y] = (r, g, b, 0)
+                            break
     
     if conf['DITHERING']:
         dither_map = {
@@ -232,7 +230,7 @@ def resize_image(img, target_size, conf=None):
 
 
 
-def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoom=None, inherited_keywords=None, ignore=['venv', '__pycache__', '.git', 'fonts',  'spritesheets', 'images', 'backup', 'geo']):
+def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoom=None, inherited_keywords=None, inherited_reverse=None, ignore=['venv', '__pycache__', '.git', 'fonts',  'spritesheets', 'images', 'backup', 'geo']):
     if path.name in ignore:
         return None
     
@@ -245,6 +243,7 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoo
     
     manual_spacing = inherited_spacing
     manual_zoom = inherited_zoom
+    manual_reverse = inherited_reverse
     keywords = list(inherited_keywords) if inherited_keywords else []
     
     is_hidden = parent_hidden or (path / '.hidden').exists()
@@ -277,6 +276,11 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoo
                                 manual_spacing = ast.literal_eval(value)
                             except:
                                 pass
+                        if key == 'STACK_REVERSE':
+                            try:
+                                manual_reverse = ast.literal_eval(value)
+                            except:
+                                pass
                         if key == 'ZOOM_VALUE':
                             try:
                                 manual_zoom = float(ast.literal_eval(value))
@@ -305,7 +309,7 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoo
                 elif item.suffix.lower() == '.html':
                     texts.append(item.relative_to('.').as_posix())
             elif item.is_dir():
-                child = scan_folder(item, parent_hidden=is_hidden, inherited_spacing=manual_spacing, inherited_zoom=manual_zoom, inherited_keywords=keywords, ignore=ignore)
+                child = scan_folder(item, parent_hidden=is_hidden, inherited_spacing=manual_spacing, inherited_zoom=manual_zoom, inherited_keywords=keywords, inherited_reverse=manual_reverse, ignore=ignore)
                 if child:
                     children.append(child)
         
@@ -338,6 +342,7 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoo
         'sa': stop_accum,
         'hid': is_hidden,
         'msp': manual_spacing,
+        'mrv': manual_reverse,
         'mzm': manual_zoom,
         'sk': keywords if keywords else []
     }
@@ -535,15 +540,17 @@ def manage_folder_labels(node, parent_config):
                 bottom_title = folder_name
                 bottom_body = ["bottom"]
         
-        if create_label_image(bottom_title, bottom_body, color, bottom_path, text_resolution, effective_font_size):
-            # new_oi_list.append(str(bottom_path.relative_to('.')))
-            new_oi_list.append(bottom_path.relative_to('.').as_posix())
+        node_reverse = node.get('mrv') or False
+        first_label = (top_title, top_body, top_path) if node_reverse else (bottom_title, bottom_body, bottom_path)
+        last_label = (bottom_title, bottom_body, bottom_path) if node_reverse else (top_title, top_body, top_path)
+
+        if create_label_image(first_label[0], first_label[1], color, first_label[2], text_resolution, effective_font_size):
+            new_oi_list.append(first_label[2].relative_to('.').as_posix())
         
         new_oi_list.extend(real_images)
         
-        if create_label_image(top_title, top_body, color, top_path, text_resolution, effective_font_size):
-            # new_oi_list.append(str(top_path.relative_to('.')))
-            new_oi_list.append(top_path.relative_to('.').as_posix())
+        if create_label_image(last_label[0], last_label[1], color, last_label[2], text_resolution, effective_font_size):
+            new_oi_list.append(last_label[2].relative_to('.').as_posix())
             
         node['oi'] = new_oi_list
         
@@ -840,6 +847,7 @@ replace_images_with_ids(root)
 sprite_config = {
     'spritesheet_size': DEFAULTS['SPRITESHEET_SIZE'],
     'stack_spacing': DEFAULTS['STACK_SPACING'],
+    'stack_reverse': DEFAULTS['STACK_REVERSE'],
     'stack_dim_opacity': DEFAULTS['STACK_DIM_OPACITY'],
     'seed': DEFAULTS['SEED'],
     'loadingscreen_img_increment': DEFAULTS['LOADINGSCREEN_IMG_INCREMENT'],
@@ -856,7 +864,7 @@ sprite_config = {
     'colored_html_dots': DEFAULTS['COLORED_HTML_DOTS'],
     'breadcrumb_html_dots': DEFAULTS['BREADCRUMB_HTML_DOTS'],
     'show_nav_accessories': DEFAULTS['SHOW_NAV_ACCESSORIES'],
-    'submenu_close_delay': DEFAULTS['SUBMENU_CLOSE_DELAY'],
+
     'wire_straight': DEFAULTS['WIRE_STRAIGHT']
 }
 
@@ -895,6 +903,11 @@ with open('index.html', 'w', encoding='utf-8') as f:
     </div>
     <div id="tree-content"></div>
     <div id="tree-history" style="display:none;"></div>
+    <div id="tree-legend">
+        <span><span style="color:#4f4;">●</span> text_stop</span>
+        <span><span style="color:#f44;">●</span> text_hard_stop</span>
+        <span><span style="color:#fff;">●</span> text page</span>
+    </div>
 </div>
 <div id="content"></div>
 <script type="importmap">
@@ -1158,10 +1171,10 @@ function dotSpan(color, cls) {{
 function navDeco(node, cls, showHtmlDots) {{
     if (!node) return '';
     let d = '';
-    if (node.na) d += ' ' + dotSpan('#44f', cls);
-    if (node.sa) d += ' ' + dotSpan('#4f4', cls);
+    if (node.na) d += ' ' + dotSpan('#4f4', cls);
+    if (node.sa) d += ' ' + dotSpan('#f44', cls);
     if (showHtmlDots !== false && node.at && node.at.length > 0) d += ' ' + buildHtmlDots(node.at, cls);
-    if (node._dc > 0) d += `<span class="nav-count">(${{node._dc}})</span>`;
+    if (node._dc > 0) d += ` <span class="nav-count">(${{node._dc}})</span>`;
     return d;
 }}
 
@@ -1549,6 +1562,7 @@ async function createThreeScene(container, images, node, highlightPath) {{
 
     const SPRITESHEET_SIZE = spriteConfig.spritesheet_size;
     const STACK_SPACING = spriteConfig.stack_spacing;
+    const STACK_REVERSE = spriteConfig.stack_reverse;
     const STACK_DIM_OPACITY = spriteConfig.stack_dim_opacity;
     const SEED = spriteConfig.seed;
     const ORDERED_GRID_LAYOUT = spriteConfig.ordered_grid_layout;
@@ -1822,16 +1836,16 @@ async function createThreeScene(container, images, node, highlightPath) {{
     }});
 
  
-    const toggleBtn = document.createElement('button');
+    const toggleBtn = document.createElement('span');
     toggleBtn.id = 'label-toggle';
-          
-    toggleBtn.style.cssText = 'position:absolute;bottom:5px;left:5px;background:#44f;border:none;width:0.7em;height:0.7em;border-radius:50%;cursor:pointer;padding:0;z-index:100;font-size:var(--font-ui, 11px)';
+    toggleBtn.textContent = 'hide labels';
+    toggleBtn.style.cssText = 'position:absolute;bottom:5px;left:5px;color:#444;font-family:monospace;font-size:11px;cursor:pointer;z-index:100;user-select:none;';
     let labelsVisible = true;
     toggleBtn.onclick = () => {{
         labelsVisible = !labelsVisible;
         labelContainer.style.display = labelsVisible ? 'block' : 'none';
         wireSvg.style.display = labelsVisible ? '' : 'none';
-        toggleBtn.style.background = labelsVisible ? '#44f' : '#f44';
+        toggleBtn.textContent = labelsVisible ? 'hide labels' : 'show labels';
     }};
     container.appendChild(toggleBtn);
 
@@ -1912,6 +1926,7 @@ const updateCount = () => {{
             // --- NEW: Retrieve Custom Spacing for this specific stack ---
             const folderNode = findNodeByPath(dataTree, folderName);
             const localSpacing = (folderNode && folderNode.msp != null) ? folderNode.msp : STACK_SPACING;
+            const localReverse = (folderNode && folderNode.mrv != null) ? folderNode.mrv : STACK_REVERSE;
             // ------------------------------------------------------------
 
 
@@ -1932,7 +1947,7 @@ const updateCount = () => {{
                 const height = 1;
                 const width = height * aspect;
 
-                const y = i * localSpacing;
+                const y = localReverse ? (stackImages.length - 1 - i) * localSpacing : i * localSpacing;
                 const matrix = new THREE.Matrix4();
                 const position = new THREE.Vector3(xPos, y, zPos);
                 const rotation = new THREE.Euler(Math.PI / 2, Math.PI, Math.PI);
@@ -2069,7 +2084,7 @@ const updateCount = () => {{
 
         // Create spatial labels from recursive tree
         const scenePath = node.path || '';
-        let hoverDimTimeout = null;
+
 
         function applyDimming(targetPath) {{
             for (const [folder, data] of Object.entries(stackGroups)) {{
@@ -2124,7 +2139,6 @@ const updateCount = () => {{
         let treeDrivenNav = false;
 
         function resetNav() {{
-            clearTimeout(hoverDimTimeout);
             treeDrivenNav = false;
             clearNav();
             clearDimming();
@@ -2140,7 +2154,6 @@ const updateCount = () => {{
 
         sceneData.driveWireNav = function(targetPath) {{
             if (currentFocusedParent || mouseIsDown) return;
-            clearTimeout(hoverDimTimeout);
             treeDrivenNav = true;
             const group = stackLabels.find(sl => sl.isGroup && (targetPath === sl.folderName || targetPath.startsWith(sl.folderName + '/')));
             if (!group) return;
@@ -2150,10 +2163,8 @@ const updateCount = () => {{
         }};
 
         sceneData.clearWireNav = function() {{
-            hoverDimTimeout = setTimeout(() => {{
-                if (currentFocusedParent) return;
-                resetNav();
-            }}, spriteConfig.submenu_close_delay);
+            if (currentFocusedParent) return;
+            resetNav();
         }};
 
         document.addEventListener('keydown', (e) => {{ if (e.key === 'Escape') resetAll(); }});
@@ -2163,7 +2174,7 @@ const updateCount = () => {{
         container.addEventListener('click', (e) => {{
             if (!_ptrDown) return;
             const dx = e.clientX - _ptrDown.x, dy = e.clientY - _ptrDown.y;
-            if (dx * dx + dy * dy > 25 || e.target.closest('.stack-label, .div-nav, button')) return;
+            if (dx * dx + dy * dy > 25 || e.target.closest('.stack-label, .div-nav, button, #label-toggle')) return;
             resetAll();
         }});
 
@@ -2205,7 +2216,9 @@ const updateCount = () => {{
             const el = document.createElement('span');
             el.className = 'stack-label' + (isGroup ? '' : ' nav-child-label');
             el.dataset.folderName = path;
-            const colorStyle = path === highlightPath ? 'color:#44f;' : '';
+            const isHighlight = path === highlightPath;
+            const colorStyle = isHighlight ? 'color:#44f;' : '';
+            if (isHighlight) el.style.borderColor = '#44f';
             el.innerHTML = `<span style="padding:2px 4px;cursor:pointer;${{colorStyle}}" data-path="${{path}}">${{name}}</span>`;
             el.addEventListener('wheel', (e) => {{ e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }}, {{ passive: false }});
             labelContainer.appendChild(el);
@@ -2214,7 +2227,6 @@ const updateCount = () => {{
             stackLabels.push(entry);
 
             el.addEventListener('mouseenter', () => {{
-                clearTimeout(hoverDimTimeout);
                 if (currentFocusedParent || mouseIsDown) return;
                 treeDrivenNav = false;
                 activeGroupPath = rootGroupPath;
@@ -2223,11 +2235,9 @@ const updateCount = () => {{
                 highlightTreePath(path);
             }});
             el.addEventListener('mouseleave', () => {{
-                hoverDimTimeout = setTimeout(() => {{
-                    if (currentFocusedParent) return;
-                    if (activeGroupPath === rootGroupPath) return;
-                    resetNav();
-                }}, spriteConfig.submenu_close_delay);
+                if (currentFocusedParent) return;
+                if (activeGroupPath === rootGroupPath) return;
+                resetNav();
             }});
 
             el.querySelector('span[data-path]').onclick = (e) => {{
@@ -2266,18 +2276,16 @@ const updateCount = () => {{
                 aEl.className = 'stack-label nav-ancestor-label';
                 aEl.dataset.folderName = aPath;
                 const aColor = aPath === highlightPath ? '#44f' : '#888';
+                aEl.style.borderColor = aColor;
                 aEl.innerHTML = `<span style="padding:2px 4px;cursor:pointer;color:${{aColor}}" data-path="${{aPath}}">${{aName}}</span>`;
                 aEl.addEventListener('wheel', (e) => {{ e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }}, {{ passive: false }});
                 labelContainer.appendChild(aEl);
                 aEl.addEventListener('mouseenter', () => {{
-                    clearTimeout(hoverDimTimeout);
                     highlightTreePath(aPath);
                 }});
                 aEl.addEventListener('mouseleave', () => {{
-                    hoverDimTimeout = setTimeout(() => {{
-                        if (currentFocusedParent) return;
-                        resetNav();
-                    }}, spriteConfig.submenu_close_delay);
+                    if (currentFocusedParent) return;
+                    clearTreeHighlight();
                 }});
                 aEl.querySelector('span[data-path]').onclick = (e) => {{
                     e.stopPropagation();

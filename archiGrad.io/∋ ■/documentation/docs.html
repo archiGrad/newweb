@@ -1,12 +1,6 @@
 <style>
 
 
-body { 
-}
-
-
-
-
 
 .dot {
   display: inline-block;
@@ -495,18 +489,14 @@ if PROCESS_IMG_LOWRES:
 <br>
 
 <div>
-<li>Add global variable <code class="highlights">REVERSE_STACK=True/False</code> to quickly change the direction of a stack's images.</li>
 <li>Turn the Houdini file into an HDA.</li>
 <li>Displacement settings per image — would make geometry 3D and closed, requires an additional spritesheet and more loading time.</li>
 <li>Agents doing A* pathfinding on the stacks, with perspective camera highlighting.</li>
 <li>Bug: large pieces of text are displayed too far above — they should all start from the same horizontal baseline.</li>
-<li>Colored dots for HTML indication are unclear. Blue for <code class="highlights">.html_stops_here</code> and green for <code class="highlights">.html_only_here</code> are not good indicators when colored dots are enabled. A different shape or animation may help.</li>
-<li>The "turn off labels" blue circle looks the same as the blue HTML dots — this should not be the case.</li>
-<li>The <code class="highlights">submenu_close_delay</code> global variable does not appear to be working — needs to be fixed.</li>
-<li>Support array entries for <code class="highlights">COLOR_TO_TRANSPARENT</code> so more than one color can be made transparent — currently limited to one. also array entries for treshold vars</li>
-<li>Add a legend to the tree viewer so it is clear what the blue and green dots (<code class="highlights">.html_only_here</code> and <code class="highlights">.html_stops_here</code>) mean.</li>
-<li>Wire nav system styling: the background is not rounded while the foreground is. The border color (blue, gray, or white) should also be consistent.</li>
-<li>back and forth buttons on desktop need a makeover.</li>
+<li>do some glitches work. random duplications, rnadom noise distribution. perhaps different patterns instead of radial aggregations</li>
+<li>add images in the end of the loop. show the images when pressing on lowest stack.</li>
+<li>sometime stacks are not full centered.</li>
+<li>basic navigation tools?.</li>
 </div>
 
 <br>

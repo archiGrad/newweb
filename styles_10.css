@@ -47,18 +47,20 @@ body {
 }
 
 
-#nav-back, #nav-fwd, #tree-expand-all {
+#nav-back, #nav-fwd {
     cursor: pointer;
-    color: #555;
+    color: #333;
     font-family: monospace;
-    font-weight: 900;
-    font-size: calc(var(--font-ui) + 2px);
+    font-size: var(--font-ui, 11px);
     user-select: none;
     padding: 0 3px;
+    margin-left: auto;
+   font-weight: 900; font-size: var(--font-ui);
 }
 #nav-back { margin-left: auto; }
-#nav-back:hover, #nav-fwd:hover, #tree-expand-all:hover { color: white !important; }
-
+#nav-fwd { margin-left: 0; }
+#nav-fwd:hover { color: green !important; }
+#nav-back:hover { color: red !important; }
 
 
 #tree-legend {
@@ -138,7 +140,7 @@ body {
     font-size: var(--font-ui, 11px);
     user-select: none;
     background: black;
-    padding:1px;
+
     border-radius: 15px;
     line-height: 1.6;
     white-space: nowrap;
@@ -586,22 +588,6 @@ a {
 
 
 
-
-
-
-
-#nav-back, #nav-fwd, #tree-expand-all { display: none;}
-
-
-
-
-
-
-
-
-
-
-    
     #info-zoom {
         display: none;
     }

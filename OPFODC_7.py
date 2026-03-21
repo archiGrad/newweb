@@ -26,8 +26,7 @@ DEFAULTS = {
     'GAUSSIAN_BLUR': False,
     'GAUSSIAN_BLUR_RADIUS': 2,
     
-    'COLOR_TO_TRANSPARENT': 'blue',
-    'COLOR_THRESHOLD': 0,
+    'COLOR_TO_TRANSPARENT': [('blue', 0),('green', 0,)],
 
     'DITHERING': False,
     'DITHER_MODE': 'custom_palette',
@@ -143,25 +142,23 @@ def apply_filter(img, conf):
         img = img.filter(ImageFilter.GaussianBlur(radius=conf['GAUSSIAN_BLUR_RADIUS']))
     
     if conf['COLOR_TO_TRANSPARENT']:
-        colors = {
+        color_map = {
             'black': (0, 0, 0), 'white': (255, 255, 255), 'red': (255, 0, 0),
             'green': (0, 255, 0), 'blue': (0, 0, 255), 'yellow': (255, 255, 0),
             'cyan': (0, 255, 255), 'magenta': (255, 0, 255), 'light_gray': (192, 192, 192),
             'dark_gray': (64, 64, 64), 'orange': (255, 165, 0), 'purple': (128, 0, 128)
         }
-        target = conf['COLOR_TO_TRANSPARENT']
-        if target in colors:
-            target_r, target_g, target_b = colors[target]
+        targets = [(color_map[c], t) for c, t in conf['COLOR_TO_TRANSPARENT'] if c in color_map]
+        if targets:
             img = img.convert('RGBA')
             pixels = img.load()
-            thresh = conf['COLOR_THRESHOLD']
             for y in range(img.height):
                 for x in range(img.width):
                     r, g, b, a = pixels[x, y]
-                    if (abs(r - target_r) < thresh and 
-                        abs(g - target_g) < thresh and 
-                        abs(b - target_b) < thresh):
-                        pixels[x, y] = (r, g, b, 0)
+                    for (tr, tg, tb), thresh in targets:
+                        if abs(r - tr) < thresh and abs(g - tg) < thresh and abs(b - tb) < thresh:
+                            pixels[x, y] = (r, g, b, 0)
+                            break
     
     if conf['DITHERING']:
         dither_map = {
@@ -895,6 +892,11 @@ with open('index.html', 'w', encoding='utf-8') as f:
     </div>
     <div id="tree-content"></div>
     <div id="tree-history" style="display:none;"></div>
+    <div id="tree-legend">
+        <span><span style="color:#4f4;">●</span> text_stop</span>
+        <span><span style="color:#f44;">●</span> text_hard_stop</span>
+        <span><span style="color:#fff;">●</span> text page</span>
+    </div>
 </div>
 <div id="content"></div>
 <script type="importmap">
@@ -1158,10 +1160,10 @@ function dotSpan(color, cls) {{
 function navDeco(node, cls, showHtmlDots) {{
     if (!node) return '';
     let d = '';
-    if (node.na) d += ' ' + dotSpan('#44f', cls);
-    if (node.sa) d += ' ' + dotSpan('#4f4', cls);
+    if (node.na) d += ' ' + dotSpan('#4f4', cls);
+    if (node.sa) d += ' ' + dotSpan('#f44', cls);
     if (showHtmlDots !== false && node.at && node.at.length > 0) d += ' ' + buildHtmlDots(node.at, cls);
-    if (node._dc > 0) d += `<span class="nav-count">(${{node._dc}})</span>`;
+    if (node._dc > 0) d += ` <span class="nav-count">(${{node._dc}})</span>`;
     return d;
 }}
 
@@ -1822,16 +1824,16 @@ async function createThreeScene(container, images, node, highlightPath) {{
     }});
 
  
-    const toggleBtn = document.createElement('button');
+    const toggleBtn = document.createElement('span');
     toggleBtn.id = 'label-toggle';
-          
-    toggleBtn.style.cssText = 'position:absolute;bottom:5px;left:5px;background:#44f;border:none;width:0.7em;height:0.7em;border-radius:50%;cursor:pointer;padding:0;z-index:100;font-size:var(--font-ui, 11px)';
+    toggleBtn.textContent = 'hide labels';
+    toggleBtn.style.cssText = 'position:absolute;bottom:5px;left:5px;color:#444;font-family:monospace;font-size:11px;cursor:pointer;z-index:100;user-select:none;';
     let labelsVisible = true;
     toggleBtn.onclick = () => {{
         labelsVisible = !labelsVisible;
         labelContainer.style.display = labelsVisible ? 'block' : 'none';
         wireSvg.style.display = labelsVisible ? '' : 'none';
-        toggleBtn.style.background = labelsVisible ? '#44f' : '#f44';
+        toggleBtn.textContent = labelsVisible ? 'hide labels' : 'show labels';
     }};
     container.appendChild(toggleBtn);
 

@@ -14,8 +14,7 @@ SPRITE_SIZE = 256  # int: any positive integer
 # GAUSSIAN_BLUR_RADIUS = 2  # int/float: any positive number
 
 # Color to Transparent
-# COLOR_TO_TRANSPARENT = 'blue'  # str: 'black', 'white', 'red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'light_gray', 'dark_gray', 'orange', 'purple'
-# COLOR_THRESHOLD = 30  # int: 0-255
+COLOR_TO_TRANSPARENT = [('blue', 20),('green', 10)]
 
 # Dithering
 # DITHERING = True  # bool: True, False
@@ -27,6 +26,9 @@ SPRITE_SIZE = 256  # int: any positive integer
 # GIF Settings
 # MAX_GIF_FRAMES = 30  # int: 1-infinite
 # GIF_SPEED = 0.6  # float: 0.0-1.0 (0=slowest, 1=fastest)
+
+STACK_REVERSE = True
+
 
 # Folder Label Settings
 # IMAGE_SETTINGS_LABELS = False  # bool: True, False
