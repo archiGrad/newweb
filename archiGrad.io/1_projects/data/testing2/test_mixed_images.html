@@ -1,0 +1,34 @@
+<h2>Mixed Image Sizes</h2>
+
+<p>Tiny inline icon: <img src="https://picsum.photos/16/16?r=50" style="vertical-align:middle;"> next to text, and another <img src="https://picsum.photos/24/24?r=51" style="vertical-align:middle;border:1px solid #555;"> slightly bigger.</p>
+
+<h3>Small thumbnail row</h3>
+<div style="display:flex;gap:4px;flex-wrap:wrap;">
+  <img src="https://picsum.photos/40/40?r=52" style="border:1px solid #333;">
+  <img src="https://picsum.photos/40/60?r=53" style="border:1px solid #333;">
+  <img src="https://picsum.photos/60/40?r=54" style="border:1px solid #333;">
+  <img src="https://picsum.photos/40/40?r=55" style="border:1px solid #333;">
+  <img src="https://picsum.photos/80/40?r=56" style="border:1px solid #333;">
+</div>
+
+<h3>Medium image centered</h3>
+<div style="text-align:center;">
+  <img src="https://picsum.photos/400/250?r=57" style="max-width:100%;height:auto;border:1px solid #333;">
+  <p style="color:#666;font-size:10px;">400x250 — should scale on narrow divs</p>
+</div>
+
+<h3>Very wide panorama</h3>
+<img src="https://picsum.photos/1600/200?r=58" style="width:100%;height:auto;">
+
+<h3>Tall narrow image next to text</h3>
+<div style="display:flex;gap:16px;align-items:flex-start;">
+  <img src="https://picsum.photos/120/400?r=59" style="max-height:300px;width:auto;border:1px solid #333;">
+  <div>
+    <p>This tall image sits next to flowing text. The text should not be pushed off screen. On narrow divs this flex row might stack — check behavior.</p>
+    <p>Second paragraph to add height and test vertical alignment against the tall image.</p>
+    <p>Third paragraph for good measure.</p>
+  </div>
+</div>
+
+<h3>Full-size image</h3>
+<img src="https://picsum.photos/1200/800?r=60" class="image_fullwidth">

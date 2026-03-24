@@ -1,0 +1,29 @@
+<h2>Code and Pre Blocks</h2>
+
+<p>This tests <code class="highlights">inline code</code> and preformatted blocks.</p>
+
+<pre>
+function assembleHtmlParts(parts, paths) {
+    const total = parts.length;
+    return parts.map((part, i) => {
+        const dot = spriteConfig.show_nav_accessories ? `&lt;span class="page-dot" style="color:${seededColorFromPath(paths[i])}"&gt;●&lt;/span&gt;` : '';
+        const pageLabel = total > 1 ? `&lt;div class="page-label"&gt;${i+1}/${total}${dot}&lt;/div&gt;` : '';
+        return `&lt;div class="text-page"&gt;${part}${pageLabel}&lt;/div&gt;`;
+    }).join('');
+}
+</pre>
+
+<br>
+
+<p>A very long single-line that should wrap:</p>
+<pre>CUSTOM_PALETTE=['#000000','#FF0000','#00FF00','#0000FF','#FFFF00','#FF00FF','#00FFFF','#FFFFFF','#888888','#444444','#CC6600','#006633']</pre>
+
+<br>
+
+<p>Wide table:</p>
+<table style="border-collapse:collapse; width:100%;">
+  <tr><td style="border:1px solid #333;padding:4px;">Parameter</td><td style="border:1px solid #333;padding:4px;">Default</td><td style="border:1px solid #333;padding:4px;">Description</td><td style="border:1px solid #333;padding:4px;">Type</td></tr>
+  <tr><td style="border:1px solid #333;padding:4px;">SPRITE_SIZE</td><td style="border:1px solid #333;padding:4px;">64</td><td style="border:1px solid #333;padding:4px;">Pixel size of each sprite on sheet</td><td style="border:1px solid #333;padding:4px;">int</td></tr>
+  <tr><td style="border:1px solid #333;padding:4px;">STACK_SPACING</td><td style="border:1px solid #333;padding:4px;">0.09</td><td style="border:1px solid #333;padding:4px;">Vertical gap between images</td><td style="border:1px solid #333;padding:4px;">float</td></tr>
+  <tr><td style="border:1px solid #333;padding:4px;">COLOR_TO_TRANSPARENT</td><td style="border:1px solid #333;padding:4px;">blue</td><td style="border:1px solid #333;padding:4px;">Background color to remove</td><td style="border:1px solid #333;padding:4px;">string</td></tr>
+</table>

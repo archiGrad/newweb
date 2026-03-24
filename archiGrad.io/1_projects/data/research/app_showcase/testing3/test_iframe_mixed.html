@@ -1,0 +1,53 @@
+<h2>Mixed Iframes and Content</h2>
+
+<p>Text before a video.</p>
+
+<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;">
+  <iframe src="https://www.youtube.com/embed/aircAruvnKk" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe>
+</div>
+
+<br>
+
+<p>Text between iframes. This tests that content flows naturally around embedded media.</p>
+
+<details>
+  <summary>Hidden Vimeo video</summary>
+  <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;">
+    <iframe src="https://player.vimeo.com/video/194276412" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe>
+  </div>
+</details>
+
+<br>
+
+<h3>Video + text side by side</h3>
+<div class="columns_2_left_wide">
+  <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;">
+    <iframe src="https://www.youtube.com/embed/Ks-_Mh1QhMc" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe>
+  </div>
+  <div>
+    <p>Description next to a video. This column is narrower. The video should maintain aspect ratio.</p>
+    <p>Second paragraph for vertical fill.</p>
+  </div>
+</div>
+
+<br>
+
+<h3>Embedded map below</h3>
+<div style="height:250px;border:1px solid #333;">
+  <iframe src="https://www.openstreetmap.org/export/embed.html?bbox=4.34,50.83,4.38,50.86&layer=mapnik" style="width:100%;height:100%;border:none;"></iframe>
+</div>
+
+<br>
+
+<h3>Three small embeds</h3>
+<div class="columns_3">
+  <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;">
+    <iframe src="https://www.youtube.com/embed/dQw4w9WgXcQ" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe>
+  </div>
+  <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;">
+    <iframe src="https://www.youtube.com/embed/jNQXAC9IVRw" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe>
+  </div>
+  <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;">
+    <iframe src="https://player.vimeo.com/video/76979871" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe>
+  </div>
+</div>

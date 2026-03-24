@@ -1,0 +1,49 @@
+<h2>Nested Layout Stress</h2>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1em;">
+  <div>
+    <p><strong>Left side</strong></p>
+    <div style="white-space:pre; margin:0.8em 0;">v archigrad.io
+  v projects
+      image1.png
+      image2.png
+      very_long_filename_that_might_cause_problems.png</div>
+  </div>
+  <div>
+    <p><strong>Right side</strong></p>
+    <div style="white-space:pre; margin:0.8em 0;">v archigrad.io
+  v other
+    v subfolder_with_a_long_name
+        another_deeply_nested_file.html</div>
+  </div>
+</div>
+
+<br>
+
+<h3>Image Grid 50px</h3>
+<div class="image_grid_50px_labeled">
+  <div class="item"><img src="https://picsum.photos/50/50?r=10"><span>a</span></div>
+  <div class="item"><img src="https://picsum.photos/50/50?r=11"><span>b</span></div>
+  <div class="item"><img src="https://picsum.photos/50/50?r=12"><span>c</span></div>
+  <div class="item"><img src="https://picsum.photos/50/50?r=13"><span>d</span></div>
+  <div class="item"><img src="https://picsum.photos/50/50?r=14"><span>e</span></div>
+  <div class="item"><img src="https://picsum.photos/50/50?r=15"><span>f</span></div>
+  <div class="item"><img src="https://picsum.photos/50/50?r=16"><span>g</span></div>
+  <div class="item"><img src="https://picsum.photos/50/50?r=17"><span>h</span></div>
+  <div class="item"><img src="https://picsum.photos/50/50?r=18"><span>i</span></div>
+  <div class="item"><img src="https://picsum.photos/50/50?r=19"><span>j</span></div>
+  <div class="item"><img src="https://picsum.photos/50/50?r=20"><span>k</span></div>
+  <div class="item"><img src="https://picsum.photos/50/50?r=21"><span>l</span></div>
+</div>
+
+<br>
+
+<h3>Left-wide asymmetric</h3>
+<div class="columns_2_left_wide">
+  <div>
+    <p>This wider left column has more text. It should take up 2/3 of the space and the text should wrap properly without causing any horizontal scrollbar on the parent container.</p>
+  </div>
+  <div>
+    <p>Narrow right.</p>
+  </div>
+</div>

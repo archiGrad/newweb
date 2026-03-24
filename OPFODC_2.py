@@ -5,6 +5,8 @@ import subprocess
 import shutil
 from PIL import Image, ImageDraw, ImageFont
 from natsort import natsorted
+import numpy as np
+
 
 # ==========================================
 # GLOBAL DEFAULT CONFIGURATION
@@ -12,7 +14,7 @@ from natsort import natsorted
 
 DEFAULTS = {
     'SPRITESHEET_SIZE': 1024 * 4,
-    'SPRITE_SIZE': 64,
+    'SPRITE_SIZE': 256,
     'RESIZE_METHOD': Image.LANCZOS,
     
     # Image Processing Defaults
@@ -24,8 +26,7 @@ DEFAULTS = {
     'GAUSSIAN_BLUR': False,
     'GAUSSIAN_BLUR_RADIUS': 2,
     
-    'COLOR_TO_TRANSPARENT': 'blue',
-    'COLOR_THRESHOLD': 30,
+    'COLOR_TO_TRANSPARENT': [('blue', 0),('green', 0,)],
 
     'DITHERING': False,
     'DITHER_MODE': 'custom_palette',
@@ -38,22 +39,23 @@ DEFAULTS = {
 
 
     # Folder Label Defaults (Renamed & Updated)
-    'IMAGE_SETTINGS_LABELS': True,       # Was IMAGE_FOLDERNAME
-    'IMAGE_SETTINGS_COLOR': 'white',     # Was IMAGE_FOLDERNAME_COLOR
-    'IMAGE_SETTINGS_FONTSIZE': 3,       # Was IMAGE_FOLDERNAME_FONTSIZE
-    'IMAGE_SETTINGS_CUSTOMTEXT': "",     # NEW: Custom text override
-    'TEXT_IMAGE_RESOLUTION': 256,        # NEW: Fixed resolution for text labels
-    'LABEL_SPRITE_SIZE': 512,            # Sprite size for top/bottom label images on spritesheets
-    'LOD_TARGET_SPRITE_SIZES': [None, 32, 8],  # Target sprite px per LOD level (None = original)
-    'LOD_VIEWHEIGHT_THRESHOLDS': [20, 40],  # viewHeight < [0] → LOD0, < [1] → LOD1, else LOD2
+    'IMAGE_SETTINGS_LABELS': True,       
+    'IMAGE_SETTINGS_COLOR': 'white',    
+    'IMAGE_SETTINGS_FONTSIZE': 3,      
+    'IMAGE_SETTINGS_CUSTOMTEXT': "",  
+    'TEXT_IMAGE_RESOLUTION': 256,    
+    'LABEL_SPRITE_SIZE': 512,       
+    'LOD_TARGET_SPRITE_SIZES': [None, 32, 8], 
+    'LOD_VIEWHEIGHT_THRESHOLDS': [20, 40],  
 
     #square image processing or not
     'SQUARE_IMAGES': True,
    
     # Viewer Config
     'STACK_SPACING': 0.09,
-    'STACK_DIM_OPACITY': 0.35, 
-    'SEED': 2922,
+    'STACK_REVERSE': False,
+    'STACK_DIM_OPACITY': 0.2, 
+    'SEED': -1000000000000,
     'QUICKLOAD_THRESHOLD': 100,
     'ORDERED_GRID_LAYOUT': True,
     'ROTATION_SPEED': 0.000015,
@@ -66,11 +68,13 @@ DEFAULTS = {
     #stack labels/annotations 
     'MAX_LABELS': 200,
     'SCREEN_BUFFER': 100,
-    'COLORED_HTML_DOTS': True,
-    'BREADCRUMB_HTML_DOTS': False,
-    'SHOW_NAV_ACCESSORIES': False,
-    'SUBMENU_CLOSE_DELAY': 400,
-    'WIRE_STRAIGHT': False
+    'COLORED_HTML_DOTS': False,
+    'BREADCRUMB_HTML_DOTS': True,
+    'SHOW_NAV_ACCESSORIES': True,
+
+    'WIRE_STRAIGHT': False,
+
+    'RENDER_MODE': 'image'
 
 }
 
@@ -81,8 +85,8 @@ DEFAULTS = {
 PROCESS_IMG_LOWRES = True  # Overrides all sprite sizes to DEFAULTS values; dotfiles cannot override
 
 if PROCESS_IMG_LOWRES:
-    DEFAULTS['SPRITE_SIZE'] = 2
-    DEFAULTS['LABEL_SPRITE_SIZE'] = 2
+    DEFAULTS['SPRITE_SIZE'] = 64
+    DEFAULTS['LABEL_SPRITE_SIZE'] = 64
 
 # ==========================================
 # CONFIGURATION PARSING
@@ -141,25 +145,23 @@ def apply_filter(img, conf):
         img = img.filter(ImageFilter.GaussianBlur(radius=conf['GAUSSIAN_BLUR_RADIUS']))
     
     if conf['COLOR_TO_TRANSPARENT']:
-        colors = {
+        color_map = {
             'black': (0, 0, 0), 'white': (255, 255, 255), 'red': (255, 0, 0),
             'green': (0, 255, 0), 'blue': (0, 0, 255), 'yellow': (255, 255, 0),
             'cyan': (0, 255, 255), 'magenta': (255, 0, 255), 'light_gray': (192, 192, 192),
             'dark_gray': (64, 64, 64), 'orange': (255, 165, 0), 'purple': (128, 0, 128)
         }
-        target = conf['COLOR_TO_TRANSPARENT']
-        if target in colors:
-            target_r, target_g, target_b = colors[target]
+        targets = [(color_map[c], t) for c, t in conf['COLOR_TO_TRANSPARENT'] if c in color_map]
+        if targets:
             img = img.convert('RGBA')
             pixels = img.load()
-            thresh = conf['COLOR_THRESHOLD']
             for y in range(img.height):
                 for x in range(img.width):
                     r, g, b, a = pixels[x, y]
-                    if (abs(r - target_r) < thresh and 
-                        abs(g - target_g) < thresh and 
-                        abs(b - target_b) < thresh):
-                        pixels[x, y] = (r, g, b, 0)
+                    for (tr, tg, tb), thresh in targets:
+                        if abs(r - tr) < thresh and abs(g - tg) < thresh and abs(b - tb) < thresh:
+                            pixels[x, y] = (r, g, b, 0)
+                            break
     
     if conf['DITHERING']:
         dither_map = {
@@ -230,12 +232,13 @@ def resize_image(img, target_size, conf=None):
 
 
 
-def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoom=None, inherited_keywords=None, ignore=['venv', '__pycache__', '.git', 'fonts',  'spritesheets', 'images', 'backup', 'geo']):
+def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoom=None, inherited_keywords=None, inherited_reverse=None, inherited_render_mode=None, ignore=['venv', '__pycache__', '.git', 'fonts',  'spritesheets', 'images', 'backup', 'geo']):
     if path.name in ignore:
         return None
     
     images = []
     texts = []
+    splats = []
     children = []
     grid_layout = None
     no_accum = False
@@ -243,6 +246,8 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoo
     
     manual_spacing = inherited_spacing
     manual_zoom = inherited_zoom
+    manual_reverse = inherited_reverse
+    render_mode = inherited_render_mode or DEFAULTS['RENDER_MODE']
     keywords = list(inherited_keywords) if inherited_keywords else []
     
     is_hidden = parent_hidden or (path / '.hidden').exists()
@@ -275,21 +280,29 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoo
                                 manual_spacing = ast.literal_eval(value)
                             except:
                                 pass
+                        if key == 'STACK_REVERSE':
+                            try:
+                                manual_reverse = ast.literal_eval(value)
+                            except:
+                                pass
                         if key == 'ZOOM_VALUE':
                             try:
                                 manual_zoom = float(ast.literal_eval(value))
                             except:
                                 pass
+                        if key == 'RENDER_MODE':
+                            if value.strip().strip("'\"") in ('image', 'splat'):
+                                render_mode = value.strip().strip("'\"")
             except:
                 pass
         
         # .stack_spacing file overrides .custom_processing
-        spacing_file = path / '.stack_spacing'
-        if spacing_file.exists():
-            try:
-                manual_spacing = float(spacing_file.read_text().strip())
-            except Exception as e:
-                print(f"Warning: Invalid .stack_spacing in {path}: {e}")
+        # spacing_file = path / '.stack_spacing'
+        # if spacing_file.exists():
+        #     try:
+        #         manual_spacing = float(spacing_file.read_text().strip())
+        #     except Exception as e:
+        #         print(f"Warning: Invalid .stack_spacing in {path}: {e}")
         
         no_accum = (path / '.html_only_here').exists()
         stop_accum = (path / '.html_stops_here').exists()
@@ -302,24 +315,30 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoo
                     images.append(item.relative_to('.').as_posix())
                 elif item.suffix.lower() == '.html':
                     texts.append(item.relative_to('.').as_posix())
+                elif item.suffix.lower() in ['.splat', '.ply']:
+                    splats.append(item.relative_to('.').as_posix())
             elif item.is_dir():
-                child = scan_folder(item, parent_hidden=is_hidden, inherited_spacing=manual_spacing, inherited_zoom=manual_zoom, inherited_keywords=keywords, ignore=ignore)
+                child = scan_folder(item, parent_hidden=is_hidden, inherited_spacing=manual_spacing, inherited_zoom=manual_zoom, inherited_keywords=keywords, inherited_reverse=manual_reverse, inherited_render_mode=render_mode, ignore=ignore)
                 if child:
                     children.append(child)
         
         all_images = images.copy()
         all_texts = texts.copy()
+        all_splats = splats.copy()
         if not stop_accum:
             for child in children:
                 all_images.extend(child['ai'])
+                all_splats.extend(child.get('sp', []))
                 if not child.get('na', False) and not child.get('sa', False):
                     all_texts.extend(child['at'])
         else:
             for child in children:
-                all_images.extend(child['ai'])        
+                all_images.extend(child['ai'])
+                all_splats.extend(child.get('sp', []))        
 
     content_type = 'empty'
-    if all_images and all_texts: content_type = 'mixed'
+    if render_mode == 'splat' and all_splats: content_type = 'splat'
+    elif all_images and all_texts: content_type = 'mixed'
     elif all_images: content_type = 'images'
     elif all_texts: content_type = 'text'
     
@@ -330,13 +349,16 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoo
         'children': children,
         'ai': all_images, 
         'at': all_texts,
+        'sp': all_splats,
         'oi': images,
         'ot': texts,
         'na': no_accum,
         'sa': stop_accum,
         'hid': is_hidden,
         'msp': manual_spacing,
+        'mrv': manual_reverse,
         'mzm': manual_zoom,
+        'rm': render_mode,
         'sk': keywords if keywords else []
     }
     if grid_layout: result['grid_layout'] = grid_layout
@@ -533,15 +555,17 @@ def manage_folder_labels(node, parent_config):
                 bottom_title = folder_name
                 bottom_body = ["bottom"]
         
-        if create_label_image(bottom_title, bottom_body, color, bottom_path, text_resolution, effective_font_size):
-            # new_oi_list.append(str(bottom_path.relative_to('.')))
-            new_oi_list.append(bottom_path.relative_to('.').as_posix())
+        node_reverse = node.get('mrv') or False
+        first_label = (top_title, top_body, top_path) if node_reverse else (bottom_title, bottom_body, bottom_path)
+        last_label = (bottom_title, bottom_body, bottom_path) if node_reverse else (top_title, top_body, top_path)
+
+        if create_label_image(first_label[0], first_label[1], color, first_label[2], text_resolution, effective_font_size):
+            new_oi_list.append(first_label[2].relative_to('.').as_posix())
         
         new_oi_list.extend(real_images)
         
-        if create_label_image(top_title, top_body, color, top_path, text_resolution, effective_font_size):
-            # new_oi_list.append(str(top_path.relative_to('.')))
-            new_oi_list.append(top_path.relative_to('.').as_posix())
+        if create_label_image(last_label[0], last_label[1], color, last_label[2], text_resolution, effective_font_size):
+            new_oi_list.append(last_label[2].relative_to('.').as_posix())
             
         node['oi'] = new_oi_list
         
@@ -599,6 +623,24 @@ current_sheet_size = 0
 sheet = None
 slot_idx = 0
 saved_sheets = []
+empty_slot = {}
+img_dedup = {}
+
+
+# def _is_fully_transparent(img):
+#     return img.convert('RGBA').getextrema()[3][1] == 0
+
+def _is_fully_transparent(img, threshold=0.005):
+    a = np.array(img.convert('RGBA'))[:, :, 3]
+    return np.count_nonzero(a) / a.size < threshold
+
+
+def _get_empty_slot(sheet_idx):
+    global slot_idx
+    if sheet_idx not in empty_slot:
+        empty_slot[sheet_idx] = slot_idx
+        slot_idx += 1
+    return empty_slot[sheet_idx]
 
 def _convert_to_ktx2(png_path):
     ktx2_path = png_path.replace('.png', '.ktx2')
@@ -660,7 +702,11 @@ for i, item in enumerate(all_image_items):
         current_sheet_size = target_size
 
     speed_val = max(0.0, min(1.0, conf['GIF_SPEED']))
-    gif_delay_ms = int(500 - (speed_val * 480))
+    # gif_delay_ms = int(500 - (speed_val * 480))
+    # gif_delay_ms = int(2000 * (1 - speed_val)**3 + 10)
+    gif_delay_ms = int(10000 * (1 - speed_val)**3 + 10)
+
+
 
     is_gif = img_path.lower().endswith('.gif')
     
@@ -668,31 +714,45 @@ for i, item in enumerate(all_image_items):
         try:
             gif = Image.open(img_path)
             frame_count = min(gif.n_frames, conf['MAX_GIF_FRAMES']) 
-            
-            if slot_idx + frame_count > sprites_per_sheet:
-                save_sheet_with_lod(sheet, sheet_idx, current_sheet_size)
-                sheet_idx += 1
-                sheet = Image.new('RGBA', (sheet_dim, sheet_dim), (0, 0, 0, 0))
-                slot_idx = 0
-            
-            start_idx = slot_idx
+
+            frames = []
             for frame_idx in range(frame_count):
                 gif.seek(frame_idx)
                 frame = gif.convert('RGBA')
                 frame = resize_image(frame, target_size, conf)
-                frame = apply_filter(frame, conf)           
-    
-                col = slot_idx % sprites_per_row
-                row = slot_idx // sprites_per_row
-                x = col * target_size
-                y = row * target_size
-                sheet.paste(frame, (x, y))
-                slot_idx += 1
-            
+                frame = apply_filter(frame, conf)
+                frames.append(frame)
+
+            new_hashes = [hash(f.tobytes()) for f in frames if not _is_fully_transparent(f)]
+            unique_new = sum(1 for h in new_hashes if (sheet_idx, h) not in img_dedup)
+            slots_needed = unique_new + (1 if len(new_hashes) < frame_count and sheet_idx not in empty_slot else 0)
+
+            if slot_idx + slots_needed > sprites_per_sheet:
+                save_sheet_with_lod(sheet, sheet_idx, current_sheet_size)
+                sheet_idx += 1
+                sheet = Image.new('RGBA', (sheet_dim, sheet_dim), (0, 0, 0, 0))
+                slot_idx = 0
+
+            fm = []
+            for frame in frames:
+                if _is_fully_transparent(frame):
+                    fm.append(_get_empty_slot(sheet_idx))
+                else:
+                    h = hash(frame.tobytes())
+                    key = (sheet_idx, h)
+                    if key in img_dedup:
+                        fm.append(img_dedup[key])
+                    else:
+                        col = slot_idx % sprites_per_row
+                        row = slot_idx // sprites_per_row
+                        sheet.paste(frame, (col * target_size, row * target_size))
+                        img_dedup[key] = slot_idx
+                        fm.append(slot_idx)
+                        slot_idx += 1
+                        
             sprite_data[img_path] = {
                 'ss': lod_paths(sheet_idx),
-                'si': start_idx,
-                'fc': frame_count,
+                'fm': fm,
                 'anim': True,
                 'w': target_size,
                 'h': target_size,
@@ -707,28 +767,45 @@ for i, item in enumerate(all_image_items):
             img = Image.open(img_path).convert('RGBA')
             img = resize_image(img, target_size, conf)
             img = apply_filter(img, conf)       
-    
-            col = slot_idx % sprites_per_row
-            row = slot_idx // sprites_per_row
-            x = col * target_size
-            y = row * target_size
-            sheet.paste(img, (x, y))
+
+            if _is_fully_transparent(img):
+                idx = _get_empty_slot(sheet_idx)
+            else:
+                h = hash(img.tobytes())
+                key = (sheet_idx, h)
+            if key in img_dedup:
+                idx = img_dedup[key]
+            else:
+                col = slot_idx % sprites_per_row
+                row = slot_idx // sprites_per_row
+                sheet.paste(img, (col * target_size, row * target_size))
+                idx = slot_idx
+                img_dedup[key] = idx
+                slot_idx += 1
             
             sprite_data[img_path] = {
                 'ss': lod_paths(sheet_idx),
-                'idx': slot_idx,
+                'idx': idx,
                 'w': img.width,
                 'h': img.height,
                 'sz': target_size,
                 'path': img_path
             }
-            slot_idx += 1
         except Exception as e:
             print(f"Error processing Image {img_path}: {e}")
 
 print()
 if sheet:
     save_sheet_with_lod(sheet, sheet_idx, current_sheet_size)
+
+
+#see how many duplicates we had and are now referenced in a single spritesheet slot
+total_static = sum(1 for item in all_image_items if not item['path'].lower().endswith('.gif'))
+total_gif_frames = sum(len(sprite_data[item['path']].get('fm', [])) for item in all_image_items if item['path'].lower().endswith('.gif') and item['path'] in sprite_data)
+total_all = total_static + total_gif_frames
+unique_slots = len(img_dedup)
+print(f"  Dedup: {total_all - unique_slots} frames reused existing slots ({unique_slots} unique out of {total_all})")
+
 
 # ==========================================
 # TREE PROCESSING & SAVING (OPTIMIZED)
@@ -785,6 +862,7 @@ replace_images_with_ids(root)
 sprite_config = {
     'spritesheet_size': DEFAULTS['SPRITESHEET_SIZE'],
     'stack_spacing': DEFAULTS['STACK_SPACING'],
+    'stack_reverse': DEFAULTS['STACK_REVERSE'],
     'stack_dim_opacity': DEFAULTS['STACK_DIM_OPACITY'],
     'seed': DEFAULTS['SEED'],
     'loadingscreen_img_increment': DEFAULTS['LOADINGSCREEN_IMG_INCREMENT'],
@@ -801,9 +879,10 @@ sprite_config = {
     'colored_html_dots': DEFAULTS['COLORED_HTML_DOTS'],
     'breadcrumb_html_dots': DEFAULTS['BREADCRUMB_HTML_DOTS'],
     'show_nav_accessories': DEFAULTS['SHOW_NAV_ACCESSORIES'],
-    'submenu_close_delay': DEFAULTS['SUBMENU_CLOSE_DELAY'],
+
     'wire_straight': DEFAULTS['WIRE_STRAIGHT']
 }
+
 
 # 5. Save BOTH the tree (lightweight) and the database (heavy)
 # with open('data.json', 'w') as f:
@@ -836,10 +915,16 @@ with open('index.html', 'w', encoding='utf-8') as f:
 <div id="tree">
     <div id="tree-toolbar" style="display:flex;align-items:center;margin-bottom:6px;">
         <input id="tree-search" type="text" placeholder="search..." />
-        <span id="tree-history-toggle">&lt;&lt;</span>
+        <span id="nav-back">&lt;</span>
+        <span id="nav-fwd">&gt;</span>
+        <span id="tree-expand-all">+</span>
     </div>
     <div id="tree-content"></div>
-    <div id="tree-history" style="display:none;"></div>
+    <div id="tree-legend">
+        <span><span style="color:#4f4;">●</span> text_stop</span>
+        <span><span style="color:#f44;">●</span> text_hard_stop</span>
+        <span><span style="color:#fff;">●</span> text page</span>
+    </div>
 </div>
 <div id="content"></div>
 <script type="importmap">
@@ -864,32 +949,34 @@ THREE.ColorManagement.enabled = false;
     const searchInput = document.getElementById('tree-search');
     let dragging = false, ox = 0, oy = 0, tabIndex = -1, visibleMatches = [];
 
-    const historyToggle = document.getElementById('tree-history-toggle');
-    const historyPanel = document.getElementById('tree-history');
-    let historyOpen = false;
-    historyToggle.onclick = (e) => {{
-        e.stopPropagation();
-        if (!historyOpen) {{
-            tree.style.width = tree.offsetWidth + 'px';
-        }} else {{
-            tree.style.width = 'max-content';
-        }}
-        historyOpen = !historyOpen;
-        historyPanel.style.display = historyOpen ? 'block' : 'none';
-        historyToggle.style.color = historyOpen ? '#44f' : '#888';
-    }};
+    const navBack = document.getElementById('nav-back');
+    const navFwd = document.getElementById('nav-fwd');
 
-    historyPanel.addEventListener('mousedown', (e) => {{
-        if (e.target.closest('.history-item, #tree-history-toggle')) return;
-        dragging = true; ox = e.clientX - tree.offsetLeft; oy = e.clientY - tree.offsetTop;
-        tree.style.cursor = 'grabbing'; document.body.style.userSelect = 'none';
-    }});
+    navBack.onclick = (e) => {{ e.stopPropagation(); navigateHistory(-1); }};
+    navFwd.onclick = (e) => {{ e.stopPropagation(); navigateHistory(1); }};
+
+    const expandAllBtn = document.getElementById('tree-expand-all');
+    let treeExpanded = false;
+    expandAllBtn.onclick = (e) => {{
+        e.stopPropagation();
+        treeExpanded = !treeExpanded;
+        expandAllBtn.textContent = treeExpanded ? '-' : '+';
+        document.querySelectorAll('.tree-link').forEach(link => {{
+            const cc = link._childContainer;
+            if (cc) cc.style.display = treeExpanded ? 'block' : 'none';
+        }});
+        document.querySelectorAll('.tree-caret').forEach(caret => {{
+            const link = caret.closest('.tree-link');
+            const cc = link?._childContainer;
+            if (cc) caret.textContent = treeExpanded ? 'v' : '>';
+        }});
+    }};
 
     tree.style.left = Math.floor(Math.random() * Math.max(0, innerWidth - 300)) + 'px';
     tree.style.top = Math.floor(Math.random() * Math.max(0, innerHeight - 400)) + 'px';
 
     tree.addEventListener('mousedown', (e) => {{
-        if (e.target.closest('.tree-link, #tree-search, #tree-history-toggle, .history-item')) return;
+        if (e.target.closest('.tree-link, #tree-search, #nav-back, #nav-fwd, #tree-expand-all')) return;
         dragging = true; ox = e.clientX - tree.offsetLeft; oy = e.clientY - tree.offsetTop;
         tree.style.cursor = 'grabbing'; document.body.style.userSelect = 'none';
     }});
@@ -1103,10 +1190,10 @@ function dotSpan(color, cls) {{
 function navDeco(node, cls, showHtmlDots) {{
     if (!node) return '';
     let d = '';
-    if (node.na) d += ' ' + dotSpan('#44f', cls);
-    if (node.sa) d += ' ' + dotSpan('#4f4', cls);
+    if (node.na) d += ' ' + dotSpan('#4f4', cls);
+    if (node.sa) d += ' ' + dotSpan('#f44', cls);
     if (showHtmlDots !== false && node.at && node.at.length > 0) d += ' ' + buildHtmlDots(node.at, cls);
-    if (node._dc > 0) d += `<span class="nav-count">(${{node._dc}})</span>`;
+    if (node._dc > 0) d += ` <span class="nav-count">(${{node._dc}})</span>`;
     return d;
 }}
 
@@ -1188,6 +1275,65 @@ function getStackMaterial(ssArray, stackName) {{
         stackMaterialCache[key]._ssArray = ssArray;
     }}
     return stackMaterialCache[key];
+}}
+
+function createAnimInstancedMaterial(ssArray, frameMapTex, frameMapWidth) {{
+    const tex = getBestLod(ssArray, LOD_COUNT - 1) || textureCache[ssArray[LOD_COUNT - 1]];
+    const SS = spriteConfig.spritesheet_size;
+    const mat = new THREE.ShaderMaterial({{
+        uniforms: {{
+            map: {{ value: tex }},
+            time: {{ value: 0.0 }},
+            frameMapTex: {{ value: frameMapTex }},
+            frameMapWidth: {{ value: frameMapWidth }},
+            spritesheetSize: {{ value: SS }}
+        }},
+        vertexShader: `
+            uniform float time;
+            uniform sampler2D frameMapTex;
+            uniform float frameMapWidth;
+            uniform float spritesheetSize;
+            attribute float frameMapOffset;
+            attribute float frameMapLength;
+            attribute float gifDuration;
+            attribute float spriteSize;
+            attribute float spritesPerRow;
+            attribute float instanceOpacity;
+            varying vec2 vUv;
+            varying float vOpacity;
+            void main() {{
+                float frame = mod(floor(time / gifDuration), frameMapLength);
+                float texIdx = frameMapOffset + frame;
+                float tx = (mod(texIdx, frameMapWidth) + 0.5) / frameMapWidth;
+                float ty = (floor(texIdx / frameMapWidth) + 0.5) / 1.0;
+                float spriteIdx = floor(texture2D(frameMapTex, vec2(tx, ty)).r + 0.5);
+                float col = mod(spriteIdx, spritesPerRow);
+                float row = floor(spriteIdx / spritesPerRow);
+                float sz = spriteSize / spritesheetSize;
+                float u0 = col * sz;
+                float v0 = 1.0 - (row + 1.0) * sz;
+                vUv = vec2(u0 + uv.x * sz, v0 + uv.y * sz);
+                vOpacity = instanceOpacity;
+                gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+            }}
+        `,
+        fragmentShader: `
+            uniform sampler2D map;
+            varying vec2 vUv;
+            varying float vOpacity;
+            void main() {{
+                vec4 c = texture2D(map, vUv);
+                if (c.a < 0.1) discard;
+                c.a *= vOpacity;
+                gl_FragColor = c;
+                #include <colorspace_fragment>
+            }}
+        `,
+        side: THREE.DoubleSide,
+        transparent: true
+    }});
+    mat._ssArray = ssArray;
+    return mat;
 }}
 
 
@@ -1427,13 +1573,369 @@ function disposeScene(sceneData) {{
     }}
 }}
 
+async function parseSplatBuffer(buffer) {{
+    const count = buffer.byteLength / 32;
+    const f32 = new Float32Array(buffer);
+    const u8 = new Uint8Array(buffer);
+    const positions = new Float32Array(count * 3);
+    const scales = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 4);
+    const rotations = new Float32Array(count * 4);
+    for (let i = 0; i < count; i++) {{
+        positions[i*3]   = f32[i*8];
+        positions[i*3+1] = f32[i*8+1];
+        positions[i*3+2] = f32[i*8+2];
+        scales[i*3]   = f32[i*8+3];
+        scales[i*3+1] = f32[i*8+4];
+        scales[i*3+2] = f32[i*8+5];
+        colors[i*4]   = u8[i*32+24] / 255;
+        colors[i*4+1] = u8[i*32+25] / 255;
+        colors[i*4+2] = u8[i*32+26] / 255;
+        colors[i*4+3] = u8[i*32+27] / 255;
+        rotations[i*4]   = (u8[i*32+28] - 128) / 128;
+        rotations[i*4+1] = (u8[i*32+29] - 128) / 128;
+        rotations[i*4+2] = (u8[i*32+30] - 128) / 128;
+        rotations[i*4+3] = (u8[i*32+31] - 128) / 128;
+    }}
+    return {{ count, positions, scales, colors, rotations }};
+}}
+
+async function parsePlyBuffer(buffer) {{
+    const u8 = new Uint8Array(buffer);
+    let headerEnd = 0;
+    for (let i = 0; i < u8.length - 10; i++) {{
+        if (u8[i]===101&&u8[i+1]===110&&u8[i+2]===100&&u8[i+3]===95&&u8[i+4]===104&&u8[i+5]===101&&u8[i+6]===97&&u8[i+7]===100&&u8[i+8]===101&&u8[i+9]===114) {{
+            headerEnd = i + 10;
+            while (headerEnd < u8.length && u8[headerEnd] !== 10) headerEnd++;
+            headerEnd++;
+            break;
+        }}
+    }}
+    const headerStr = new TextDecoder().decode(u8.slice(0, headerEnd));
+    const lines = headerStr.split('\\n');
+    let count = 0;
+    const props = [];
+    for (const line of lines) {{
+        const m = line.match(/element vertex (\\d+)/);
+        if (m) count = parseInt(m[1]);
+        const pm = line.match(/property (float|double|uchar|uint8|int) (\\w+)/);
+        if (pm) props.push({{ type: pm[1], name: pm[2] }});
+    }}
+    const propMap = {{}};
+    props.forEach((p, i) => propMap[p.name] = i);
+    let stride = 0;
+    const offsets = [];
+    for (const p of props) {{
+        offsets.push(stride);
+        if (p.type === 'float') stride += 4;
+        else if (p.type === 'double') stride += 8;
+        else stride += 1;
+    }}
+    const data = new DataView(buffer, headerEnd);
+    const positions = new Float32Array(count * 3);
+    const scales = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 4);
+    const rotations = new Float32Array(count * 4);
+
+    const getF = (i, name) => {{
+        if (!(name in propMap)) return 0;
+        const idx = propMap[name];
+        return props[idx].type === 'double'
+            ? data.getFloat64(i * stride + offsets[idx], true)
+            : data.getFloat32(i * stride + offsets[idx], true);
+    }};
+    const getU = (i, name) => {{
+        if (!(name in propMap)) return 128;
+        return data.getUint8(i * stride + offsets[propMap[name]]);
+    }};
+
+    const SH_C0 = 0.28209479177387814;
+    const hasSH = 'f_dc_0' in propMap;
+    const hasRGB = 'red' in propMap;
+
+    for (let i = 0; i < count; i++) {{
+        positions[i*3]   = getF(i, 'x');
+        positions[i*3+1] = getF(i, 'y');
+        positions[i*3+2] = getF(i, 'z');
+        scales[i*3]   = Math.exp(getF(i, 'scale_0'));
+        scales[i*3+1] = Math.exp(getF(i, 'scale_1'));
+        scales[i*3+2] = Math.exp(getF(i, 'scale_2'));
+        if (hasSH) {{
+            colors[i*4]   = 0.5 + SH_C0 * getF(i, 'f_dc_0');
+            colors[i*4+1] = 0.5 + SH_C0 * getF(i, 'f_dc_1');
+            colors[i*4+2] = 0.5 + SH_C0 * getF(i, 'f_dc_2');
+        }} else if (hasRGB) {{
+            colors[i*4]   = getU(i, 'red') / 255;
+            colors[i*4+1] = getU(i, 'green') / 255;
+            colors[i*4+2] = getU(i, 'blue') / 255;
+        }} else {{
+            colors[i*4] = colors[i*4+1] = colors[i*4+2] = 1.0;
+        }}
+        const rawOpacity = getF(i, 'opacity');
+        colors[i*4+3] = 1.0 / (1.0 + Math.exp(-rawOpacity));
+        rotations[i*4]   = getF(i, 'rot_0');
+        rotations[i*4+1] = getF(i, 'rot_1');
+        rotations[i*4+2] = getF(i, 'rot_2');
+        rotations[i*4+3] = getF(i, 'rot_3');
+    }}
+    return {{ count, positions, scales, colors, rotations }};
+}}
+
+async function parseSplatFile(url, buffer) {{
+    if (url.toLowerCase().endsWith('.ply')) return parsePlyBuffer(buffer);
+    return parseSplatBuffer(buffer);
+}}
+
+function createSplatMaterial() {{
+    return new THREE.ShaderMaterial({{
+        uniforms: {{
+            viewport: {{ value: new THREE.Vector2() }},
+            focal: {{ value: 1.0 }}
+        }},
+        vertexShader: `
+            precision highp float;
+            attribute vec3 splatCenter;
+            attribute vec3 splatScale;
+            attribute vec4 splatColor;
+            attribute vec4 splatRotation;
+            attribute float splatIndex;
+            varying vec4 vColor;
+            varying vec2 vPosition;
+            uniform vec2 viewport;
+            uniform float focal;
+
+            mat3 quatToMat(vec4 q) {{
+                float x=q.x, y=q.y, z=q.z, w=q.w;
+                return mat3(
+                    1.-2.*(y*y+z*z), 2.*(x*y+w*z), 2.*(x*z-w*y),
+                    2.*(x*y-w*z), 1.-2.*(x*x+z*z), 2.*(y*z+w*x),
+                    2.*(x*z+w*y), 2.*(y*z-w*x), 1.-2.*(x*x+y*y)
+                );
+            }}
+
+            void main() {{
+                vec4 camSpace = modelViewMatrix * vec4(splatCenter, 1.0);
+                vec4 pos2d = projectionMatrix * camSpace;
+                float clip = 1.2 * pos2d.w;
+                if (pos2d.z < -clip || pos2d.x < -clip || pos2d.x > clip || pos2d.y < -clip || pos2d.y > clip) {{
+                    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+                    return;
+                }}
+
+                mat3 R = quatToMat(splatRotation);
+                mat3 S = mat3(
+                    splatScale.x, 0.0, 0.0,
+                    0.0, splatScale.y, 0.0,
+                    0.0, 0.0, splatScale.z
+                );
+                mat3 M = R * S;
+                mat3 Sigma = M * transpose(M);
+
+                mat3 V = mat3(modelViewMatrix);
+                mat3 Sigma2D = V * Sigma * transpose(V);
+
+                float a = Sigma2D[0][0] + 1.0/focal;
+                float b = Sigma2D[0][1];
+                float c = Sigma2D[1][1] + 1.0/focal;
+
+                float det = a * c - b * b;
+                if (det == 0.0) return;
+
+                float trace = a + c;
+                float disc = max(0.1, trace * trace * 0.25 - det);
+                float sqrtDisc = sqrt(disc);
+                float lambda1 = max(trace * 0.5 + sqrtDisc, 0.1);
+                float lambda2 = max(trace * 0.5 - sqrtDisc, 0.1);
+
+                float radius = ceil(3.0 * sqrt(max(lambda1, lambda2)));
+                vec2 quadOffset = position.xy * radius;
+
+                vec2 ndcPixel = vec2(2.0 / viewport.x, 2.0 / viewport.y);
+                gl_Position = pos2d / pos2d.w + vec4(quadOffset * ndcPixel, 0.0, 0.0);
+                gl_Position.z = pos2d.z / pos2d.w;
+
+                vColor = splatColor;
+                vPosition = quadOffset;
+            }}
+        `,
+        fragmentShader: `
+            precision highp float;
+            varying vec4 vColor;
+            varying vec2 vPosition;
+            void main() {{
+                float A = -dot(vPosition, vPosition) / 2.0;
+                if (A < -4.0) discard;
+                float alpha = exp(A) * vColor.a;
+                if (alpha < 1.0/255.0) discard;
+                gl_FragColor = vec4(vColor.rgb, alpha);
+            }}
+        `,
+        transparent: true,
+        depthTest: true,
+        depthWrite: false,
+        blending: THREE.NormalBlending
+    }});
+}}
+
+async function createSplatScene(container, splatPaths, node) {{
+    const scene = new THREE.Scene();
+    const w = container.clientWidth || 1;
+    const h = container.clientHeight || 1;
+    const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({{ antialias: false, alpha: true }});
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.1;
+
+    const fetched = await Promise.all(splatPaths.map(async p => ({{ url: p, buf: await fetch(p).then(r => r.arrayBuffer()) }})));
+    let totalCount = 0;
+    const parsed = [];
+    for (const {{ url, buf }} of fetched) {{
+        const d = await parseSplatFile(url, buf);
+        parsed.push(d);
+        totalCount += d.count;
+    }}
+
+    const allPos = new Float32Array(totalCount * 3);
+    const allScl = new Float32Array(totalCount * 3);
+    const allCol = new Float32Array(totalCount * 4);
+    const allRot = new Float32Array(totalCount * 4);
+    let offset = 0;
+    for (const d of parsed) {{
+        allPos.set(d.positions, offset * 3);
+        allScl.set(d.scales, offset * 3);
+        allCol.set(d.colors, offset * 4);
+        allRot.set(d.rotations, offset * 4);
+        offset += d.count;
+    }}
+
+    const quadGeo = new THREE.PlaneGeometry(1, 1);
+    const geo = new THREE.InstancedBufferGeometry();
+    geo.index = quadGeo.index;
+    geo.attributes.position = quadGeo.attributes.position;
+    geo.instanceCount = totalCount;
+
+    geo.setAttribute('splatCenter', new THREE.InstancedBufferAttribute(allPos, 3));
+    geo.setAttribute('splatScale', new THREE.InstancedBufferAttribute(allScl, 3));
+    geo.setAttribute('splatColor', new THREE.InstancedBufferAttribute(allCol, 4));
+    geo.setAttribute('splatRotation', new THREE.InstancedBufferAttribute(allRot, 4));
+
+    const sortIndices = new Uint32Array(totalCount);
+    for (let i = 0; i < totalCount; i++) sortIndices[i] = i;
+
+    const material = createSplatMaterial();
+    material.uniforms.viewport.value.set(w, h);
+    const fovRad = camera.fov * Math.PI / 180;
+    material.uniforms.focal.value = h / (2 * Math.tan(fovRad / 2));
+
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+
+    const bbox = new THREE.Box3();
+    for (let i = 0; i < totalCount; i++) {{
+        bbox.expandByPoint(new THREE.Vector3(allPos[i*3], allPos[i*3+1], allPos[i*3+2]));
+    }}
+    const center = new THREE.Vector3();
+    bbox.getCenter(center);
+    const size = new THREE.Vector3();
+    bbox.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    camera.position.copy(center).add(new THREE.Vector3(0, 0, maxDim * 1.5));
+    controls.target.copy(center);
+    controls.update();
+
+    const depthBuffer = new Float32Array(totalCount);
+    const camDir = new THREE.Vector3();
+
+    function sortByDepth() {{
+        camera.getWorldDirection(camDir);
+        for (let i = 0; i < totalCount; i++) {{
+            depthBuffer[i] = allPos[i*3]*camDir.x + allPos[i*3+1]*camDir.y + allPos[i*3+2]*camDir.z;
+        }}
+        sortIndices.sort((a, b) => depthBuffer[b] - depthBuffer[a]);
+        const sortedPos = new Float32Array(totalCount * 3);
+        const sortedScl = new Float32Array(totalCount * 3);
+        const sortedCol = new Float32Array(totalCount * 4);
+        const sortedRot = new Float32Array(totalCount * 4);
+        for (let i = 0; i < totalCount; i++) {{
+            const s = sortIndices[i];
+            sortedPos[i*3]   = allPos[s*3];
+            sortedPos[i*3+1] = allPos[s*3+1];
+            sortedPos[i*3+2] = allPos[s*3+2];
+            sortedScl[i*3]   = allScl[s*3];
+            sortedScl[i*3+1] = allScl[s*3+1];
+            sortedScl[i*3+2] = allScl[s*3+2];
+            sortedCol[i*4]   = allCol[s*4];
+            sortedCol[i*4+1] = allCol[s*4+1];
+            sortedCol[i*4+2] = allCol[s*4+2];
+            sortedCol[i*4+3] = allCol[s*4+3];
+            sortedRot[i*4]   = allRot[s*4];
+            sortedRot[i*4+1] = allRot[s*4+1];
+            sortedRot[i*4+2] = allRot[s*4+2];
+            sortedRot[i*4+3] = allRot[s*4+3];
+        }}
+        geo.attributes.splatCenter.array.set(sortedPos);
+        geo.attributes.splatScale.array.set(sortedScl);
+        geo.attributes.splatColor.array.set(sortedCol);
+        geo.attributes.splatRotation.array.set(sortedRot);
+        geo.attributes.splatCenter.needsUpdate = true;
+        geo.attributes.splatScale.needsUpdate = true;
+        geo.attributes.splatColor.needsUpdate = true;
+        geo.attributes.splatRotation.needsUpdate = true;
+    }}
+
+    sortByDepth();
+    let lastSort = 0;
+
+    let animId;
+    function animate() {{
+        animId = requestAnimationFrame(animate);
+        controls.update();
+        const now = performance.now();
+        if (now - lastSort > 100) {{
+            sortByDepth();
+            lastSort = now;
+        }}
+        renderer.render(scene, camera);
+    }}
+    animate();
+
+    function onResize() {{
+        const nw = container.clientWidth || 1;
+        const nh = container.clientHeight || 1;
+        camera.aspect = nw / nh;
+        camera.updateProjectionMatrix();
+        renderer.setSize(nw, nh);
+        material.uniforms.viewport.value.set(nw, nh);
+        material.uniforms.focal.value = nh / (2 * Math.tan(camera.fov * Math.PI / 360));
+    }}
+    window.addEventListener('resize', onResize);
+    const _splatRo = new ResizeObserver(() => {{
+        if (container.clientWidth > 0 && container.clientHeight > 0) onResize();
+    }});
+    _splatRo.observe(container);
+
+    activeScenes.push({{
+        scene, renderer, camera,
+        animationId: animId,
+        resizeHandler: onResize
+    }});
+}}
+
 async function createThreeScene(container, images, node, highlightPath) {{
     const scene = new THREE.Scene();
     const grouped = {{}};
     const stackGroups = {{}};
+    const animInstances = [];
 
     const SPRITESHEET_SIZE = spriteConfig.spritesheet_size;
     const STACK_SPACING = spriteConfig.stack_spacing;
+    const STACK_REVERSE = spriteConfig.stack_reverse;
     const STACK_DIM_OPACITY = spriteConfig.stack_dim_opacity;
     const SEED = spriteConfig.seed;
     const ORDERED_GRID_LAYOUT = spriteConfig.ordered_grid_layout;
@@ -1461,7 +1963,7 @@ async function createThreeScene(container, images, node, highlightPath) {{
  
     const baseGeometry = new THREE.PlaneGeometry(1, 1);
     
-    const spacing = 1.5;
+    const spacing = 1;
     let cols, rows, offsetX, offsetZ;
     let gridGroups;
     
@@ -1672,6 +2174,9 @@ async function createThreeScene(container, images, node, highlightPath) {{
         const localSpacing = (folderNode && folderNode.msp != null) ? folderNode.msp : STACK_SPACING;
         
         maxStackHeight = Math.max(maxStackHeight, grouped[folder].length * localSpacing);
+        console.log(folder, grouped[folder].length, 'h:', grouped[folder].length * localSpacing);
+
+            
     }});
     const midHeight = maxStackHeight / 2;
 
@@ -1704,16 +2209,16 @@ async function createThreeScene(container, images, node, highlightPath) {{
     }});
 
  
-    const toggleBtn = document.createElement('button');
+    const toggleBtn = document.createElement('span');
     toggleBtn.id = 'label-toggle';
-          
-    toggleBtn.style.cssText = 'position:absolute;bottom:5px;left:5px;background:#44f;border:none;width:0.7em;height:0.7em;border-radius:50%;cursor:pointer;padding:0;z-index:100;font-size:var(--font-ui, 11px)';
+    toggleBtn.textContent = 'hide labels';
+    toggleBtn.style.cssText = 'position:absolute;bottom:5px;left:5px;color:#444;font-family:monospace;font-size:11px;cursor:pointer;z-index:100;user-select:none;';
     let labelsVisible = true;
     toggleBtn.onclick = () => {{
         labelsVisible = !labelsVisible;
         labelContainer.style.display = labelsVisible ? 'block' : 'none';
         wireSvg.style.display = labelsVisible ? '' : 'none';
-        toggleBtn.style.background = labelsVisible ? '#44f' : '#f44';
+        toggleBtn.textContent = labelsVisible ? 'hide labels' : 'show labels';
     }};
     container.appendChild(toggleBtn);
 
@@ -1746,6 +2251,15 @@ const updateCount = () => {{
                 const op = (folder.startsWith(parentFolder + '/') || folder === parentFolder) ? 1.0 : STACK_DIM_OPACITY;
                 data.materials.forEach(m => m.opacity = op);
             }}
+            for (const ai of animInstances) {{
+                let dirty = false;
+                for (let i = 0; i < ai.instances.length; i++) {{
+                    const fn = ai.instances[i].folderName;
+                    const op = (fn.startsWith(parentFolder + '/') || fn === parentFolder) ? 1.0 : STACK_DIM_OPACITY;
+                    if (ai.opAttr.array[i] !== op) {{ ai.opAttr.array[i] = op; dirty = true; }}
+                }}
+                if (dirty) ai.opAttr.needsUpdate = true;
+            }}
             stackLabels.forEach(sl => {{
                 const match = sl.folderName.startsWith(parentFolder + '/') || sl.folderName === parentFolder;
                 sl.element.style.opacity = match ? '1.0' : String(STACK_DIM_OPACITY);
@@ -1756,6 +2270,10 @@ const updateCount = () => {{
     function unfocusAll() {{
         for (const [folder, data] of Object.entries(stackGroups)) {{
             data.materials.forEach(m => m.opacity = 1.0);
+        }}
+        for (const ai of animInstances) {{
+            ai.opAttr.array.fill(1.0);
+            ai.opAttr.needsUpdate = true;
         }}
         stackLabels.forEach(sl => sl.element.style.opacity = '1.0');
         currentFocusedParent = null;
@@ -1773,6 +2291,7 @@ const updateCount = () => {{
         await Promise.all([...lod2Paths, ...lod1Paths].map(p => loadSpritesheet(p)));
         
         const groupLabelData = {{}};
+        const animBuckets = {{}};
         for (let stackIdx = 0; stackIdx < folders.length; stackIdx++) {{
             const folderName = folders[stackIdx];
 
@@ -1780,6 +2299,7 @@ const updateCount = () => {{
             // --- NEW: Retrieve Custom Spacing for this specific stack ---
             const folderNode = findNodeByPath(dataTree, folderName);
             const localSpacing = (folderNode && folderNode.msp != null) ? folderNode.msp : STACK_SPACING;
+            const localReverse = (folderNode && folderNode.mrv != null) ? folderNode.mrv : STACK_REVERSE;
             // ------------------------------------------------------------
 
 
@@ -1791,17 +2311,16 @@ const updateCount = () => {{
             const stackGroup = new THREE.Group();
             const stackMaterials = new Set();
             const mergeBuckets = {{}};
-            const animObjects = [];
 
             for (let i = 0; i < stackImages.length; i++) {{
                 const imgData = stackImages[i];
                 stackMaterials.add(getStackMaterial(imgData.ss, folderName));
                 
                 const aspect = imgData.w / imgData.h;
-                const height = 1.5;
+                const height = 1;
                 const width = height * aspect;
 
-                const y = i * localSpacing;
+                const y = localReverse ? (stackImages.length - 1 - i) * localSpacing : i * localSpacing;
                 const matrix = new THREE.Matrix4();
                 const position = new THREE.Vector3(xPos, y, zPos);
                 const rotation = new THREE.Euler(Math.PI / 2, Math.PI, Math.PI);
@@ -1813,31 +2332,13 @@ const updateCount = () => {{
                 const SPRITES_PER_ROW = Math.floor(SPRITESHEET_SIZE / currentSpriteSize);
 
                 if (imgData.anim) {{
-                    const mesh = new THREE.Mesh(baseGeometry.clone(), getStackMaterial(imgData.ss, folderName));
-                    mesh.applyMatrix4(matrix);
-                    
-                    mesh.userData = {{ imgData: imgData, spritesheet: imgData.ss, spritesPerRow: SPRITES_PER_ROW }};
-                    mesh.onBeforeRender = function() {{
-                        const frame = Math.floor(Date.now() / this.userData.imgData.gd) % this.userData.imgData.fc;
-                        const idx = this.userData.imgData.si + frame;
-                        const rowLen = this.userData.spritesPerRow;
-                        const sprite_col = idx % rowLen;
-                        const sprite_row = Math.floor(idx / rowLen);
-                        
-                        const size = this.userData.imgData.sz;
-                        const u_start = (sprite_col * size) / SPRITESHEET_SIZE;
-                        const u_end = u_start + size / SPRITESHEET_SIZE;
-                        const v_start = 1 - ((sprite_row + 1) * size) / SPRITESHEET_SIZE;
-                        const v_end = 1 - (sprite_row * size ) / SPRITESHEET_SIZE;
-                        
-                        const uvs = this.geometry.attributes.uv;
-                        uvs.setXY(0, u_start, v_end);
-                        uvs.setXY(1, u_end, v_end);
-                        uvs.setXY(2, u_start, v_start);
-                        uvs.setXY(3, u_end, v_start);
-                        uvs.needsUpdate = true;
-                    }};
-                    animObjects.push(mesh);
+                    const bKey = ssBase(imgData.ss);
+                    if (!animBuckets[bKey]) animBuckets[bKey] = {{ ssArray: imgData.ss, instances: [] }};
+                    animBuckets[bKey].instances.push({{
+                        matrix, imgData, folderName,
+                        spritesPerRow: SPRITES_PER_ROW,
+                        lastFrame: -1
+                    }});
                 }} else {{
                     const bKey = ssBase(imgData.ss);
                     if (!mergeBuckets[bKey]) mergeBuckets[bKey] = {{ geoms: [], ssArray: imgData.ss }};
@@ -1874,7 +2375,6 @@ const updateCount = () => {{
                     bucket.geoms.forEach(g => g.dispose());
                 }}
             }}
-            animObjects.forEach(obj => stackGroup.add(obj));
             scene.add(stackGroup);
             stackGroups[folderName] = {{ group: stackGroup, materials: stackMaterials }};
 
@@ -1905,9 +2405,59 @@ const updateCount = () => {{
             groupLabelData[groupKey].folders.push({{ folderName, relPath, imageCount: stackImages.length, xPos, zPos, topY }});
         }}
 
+        for (const [bKey, bucket] of Object.entries(animBuckets)) {{
+            const count = bucket.instances.length;
+            if (count === 0) continue;
+
+            const allFrames = [];
+            const offsets = new Float32Array(count);
+            const lengths = new Float32Array(count);
+            const durations = new Float32Array(count);
+            const sizes = new Float32Array(count);
+            const sprs = new Float32Array(count);
+            const opacities = new Float32Array(count);
+
+            for (let i = 0; i < count; i++) {{
+                const inst = bucket.instances[i];
+                offsets[i] = allFrames.length;
+                lengths[i] = inst.imgData.fm.length;
+                durations[i] = inst.imgData.gd;
+                sizes[i] = inst.imgData.sz;
+                sprs[i] = inst.spritesPerRow;
+                opacities[i] = 1.0;
+                for (const f of inst.imgData.fm) allFrames.push(f);
+            }}
+
+            const fmWidth = allFrames.length;
+            const fmData = new Float32Array(allFrames);
+            const frameMapTex = new THREE.DataTexture(fmData, fmWidth, 1, THREE.RedFormat, THREE.FloatType);
+            frameMapTex.minFilter = THREE.NearestFilter;
+            frameMapTex.magFilter = THREE.NearestFilter;
+            frameMapTex.needsUpdate = true;
+
+            const mat = createAnimInstancedMaterial(bucket.ssArray, frameMapTex, fmWidth);
+            const geo = baseGeometry.clone();
+            const iMesh = new THREE.InstancedMesh(geo, mat, count);
+            for (let i = 0; i < count; i++) iMesh.setMatrixAt(i, bucket.instances[i].matrix);
+            iMesh.instanceMatrix.needsUpdate = true;
+
+            geo.setAttribute('frameMapOffset', new THREE.InstancedBufferAttribute(offsets, 1));
+            geo.setAttribute('frameMapLength', new THREE.InstancedBufferAttribute(lengths, 1));
+            geo.setAttribute('gifDuration', new THREE.InstancedBufferAttribute(durations, 1));
+            geo.setAttribute('spriteSize', new THREE.InstancedBufferAttribute(sizes, 1));
+            geo.setAttribute('spritesPerRow', new THREE.InstancedBufferAttribute(sprs, 1));
+            const opAttr = new THREE.InstancedBufferAttribute(opacities, 1);
+            opAttr.setUsage(THREE.DynamicDrawUsage);
+            geo.setAttribute('instanceOpacity', opAttr);
+
+            iMesh.frustumCulled = false;
+            scene.add(iMesh);
+            animInstances.push({{ mesh: iMesh, instances: bucket.instances, opAttr, ssArray: bucket.ssArray, mat }});
+        }}
+
         // Create spatial labels from recursive tree
         const scenePath = node.path || '';
-        let hoverDimTimeout = null;
+
 
         function applyDimming(targetPath) {{
             for (const [folder, data] of Object.entries(stackGroups)) {{
@@ -1915,6 +2465,17 @@ const updateCount = () => {{
                 const isAncestor = targetPath.startsWith(folder + '/');
                 const op = (isMatch || isAncestor) ? 1.0 : STACK_DIM_OPACITY;
                 data.materials.forEach(m => m.opacity = op);
+            }}
+            for (const ai of animInstances) {{
+                let dirty = false;
+                for (let i = 0; i < ai.instances.length; i++) {{
+                    const fn = ai.instances[i].folderName;
+                    const isMatch = fn.startsWith(targetPath + '/') || fn === targetPath;
+                    const isAncestor = targetPath.startsWith(fn + '/');
+                    const op = (isMatch || isAncestor) ? 1.0 : STACK_DIM_OPACITY;
+                    if (ai.opAttr.array[i] !== op) {{ ai.opAttr.array[i] = op; dirty = true; }}
+                }}
+                if (dirty) ai.opAttr.needsUpdate = true;
             }}
             stackLabels.forEach(sl => {{
                 const isMatch = sl.folderName.startsWith(targetPath + '/') || sl.folderName === targetPath;
@@ -1925,6 +2486,10 @@ const updateCount = () => {{
 
         function clearDimming() {{
             for (const data of Object.values(stackGroups)) data.materials.forEach(m => m.opacity = 1.0);
+            for (const ai of animInstances) {{
+                ai.opAttr.array.fill(1.0);
+                ai.opAttr.needsUpdate = true;
+            }}
             stackLabels.forEach(sl => sl.element.style.opacity = '1.0');
         }}
 
@@ -1947,7 +2512,6 @@ const updateCount = () => {{
         let treeDrivenNav = false;
 
         function resetNav() {{
-            clearTimeout(hoverDimTimeout);
             treeDrivenNav = false;
             clearNav();
             clearDimming();
@@ -1963,7 +2527,6 @@ const updateCount = () => {{
 
         sceneData.driveWireNav = function(targetPath) {{
             if (currentFocusedParent || mouseIsDown) return;
-            clearTimeout(hoverDimTimeout);
             treeDrivenNav = true;
             const group = stackLabels.find(sl => sl.isGroup && (targetPath === sl.folderName || targetPath.startsWith(sl.folderName + '/')));
             if (!group) return;
@@ -1973,10 +2536,8 @@ const updateCount = () => {{
         }};
 
         sceneData.clearWireNav = function() {{
-            hoverDimTimeout = setTimeout(() => {{
-                if (currentFocusedParent) return;
-                resetNav();
-            }}, spriteConfig.submenu_close_delay);
+            if (currentFocusedParent) return;
+            resetNav();
         }};
 
         document.addEventListener('keydown', (e) => {{ if (e.key === 'Escape') resetAll(); }});
@@ -1986,7 +2547,7 @@ const updateCount = () => {{
         container.addEventListener('click', (e) => {{
             if (!_ptrDown) return;
             const dx = e.clientX - _ptrDown.x, dy = e.clientY - _ptrDown.y;
-            if (dx * dx + dy * dy > 25 || e.target.closest('.stack-label, .div-nav, button')) return;
+            if (dx * dx + dy * dy > 25 || e.target.closest('.stack-label, .div-nav, button, #label-toggle')) return;
             resetAll();
         }});
 
@@ -2028,7 +2589,9 @@ const updateCount = () => {{
             const el = document.createElement('span');
             el.className = 'stack-label' + (isGroup ? '' : ' nav-child-label');
             el.dataset.folderName = path;
-            const colorStyle = path === highlightPath ? 'color:#44f;' : '';
+            const isHighlight = path === highlightPath;
+            const colorStyle = isHighlight ? 'color:#44f;' : '';
+            if (isHighlight) el.style.borderColor = '#44f';
             el.innerHTML = `<span style="padding:2px 4px;cursor:pointer;${{colorStyle}}" data-path="${{path}}">${{name}}</span>`;
             el.addEventListener('wheel', (e) => {{ e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }}, {{ passive: false }});
             labelContainer.appendChild(el);
@@ -2037,7 +2600,6 @@ const updateCount = () => {{
             stackLabels.push(entry);
 
             el.addEventListener('mouseenter', () => {{
-                clearTimeout(hoverDimTimeout);
                 if (currentFocusedParent || mouseIsDown) return;
                 treeDrivenNav = false;
                 activeGroupPath = rootGroupPath;
@@ -2046,11 +2608,9 @@ const updateCount = () => {{
                 highlightTreePath(path);
             }});
             el.addEventListener('mouseleave', () => {{
-                hoverDimTimeout = setTimeout(() => {{
-                    if (currentFocusedParent) return;
-                    if (activeGroupPath === rootGroupPath) return;
-                    resetNav();
-                }}, spriteConfig.submenu_close_delay);
+                if (currentFocusedParent) return;
+                if (activeGroupPath === rootGroupPath) return;
+                resetNav();
             }});
 
             el.querySelector('span[data-path]').onclick = (e) => {{
@@ -2089,18 +2649,16 @@ const updateCount = () => {{
                 aEl.className = 'stack-label nav-ancestor-label';
                 aEl.dataset.folderName = aPath;
                 const aColor = aPath === highlightPath ? '#44f' : '#888';
+                aEl.style.borderColor = aColor;
                 aEl.innerHTML = `<span style="padding:2px 4px;cursor:pointer;color:${{aColor}}" data-path="${{aPath}}">${{aName}}</span>`;
                 aEl.addEventListener('wheel', (e) => {{ e.stopPropagation(); renderer.domElement.dispatchEvent(new WheelEvent('wheel', e)); }}, {{ passive: false }});
                 labelContainer.appendChild(aEl);
                 aEl.addEventListener('mouseenter', () => {{
-                    clearTimeout(hoverDimTimeout);
                     highlightTreePath(aPath);
                 }});
                 aEl.addEventListener('mouseleave', () => {{
-                    hoverDimTimeout = setTimeout(() => {{
-                        if (currentFocusedParent) return;
-                        resetNav();
-                    }}, spriteConfig.submenu_close_delay);
+                    if (currentFocusedParent) return;
+                    clearTreeHighlight();
                 }});
                 aEl.querySelector('span[data-path]').onclick = (e) => {{
                     e.stopPropagation();
@@ -2154,6 +2712,7 @@ const updateCount = () => {{
     const cameraViewProjectionMatrix = new THREE.Matrix4();
 
     let frameCount = 0;
+    const animStartTime = Date.now();
     
     // OPTIMIZATION SETTINGS
 
@@ -2192,7 +2751,14 @@ const updateCount = () => {{
                 const best = getBestLod(mat._ssArray, targetLod);
                 if (best && mat.map !== best) {{ mat.map = best; mat.needsUpdate = true; }}
             }}
+            for (const ai of animInstances) {{
+                const best = getBestLod(ai.ssArray, targetLod);
+                if (best && ai.mat.uniforms.map.value !== best) ai.mat.uniforms.map.value = best;
+            }}
         }}
+
+        const now = Date.now() - animStartTime;
+        for (const ai of animInstances) ai.mat.uniforms.time.value = now;
         
         // OPTIMIZED LABEL UPDATE (Every frame, but efficient)
         if (labelsVisible) {{
@@ -2490,58 +3056,54 @@ function updateURL(node) {{
 
 const NAV_HISTORY_MAX = 20;
 const navHistory = [];
+let navHistoryIndex = -1;
+let navIsTraversing = false;
 
 function recordHistory(node) {{
     const entry = {{ path: node.path, name: node.name || node.path }};
-    const last = navHistory[navHistory.length - 1];
-    if (last && last.path === entry.path) return;
+    if (navHistoryIndex >= 0 && navHistory[navHistoryIndex] && navHistory[navHistoryIndex].path === entry.path) return;
+    if (navHistoryIndex < navHistory.length - 1) navHistory.splice(navHistoryIndex + 1);
     navHistory.push(entry);
     if (navHistory.length > NAV_HISTORY_MAX) navHistory.shift();
-    updateHistoryDiv();
+    navHistoryIndex = navHistory.length - 1;
+    updateNavButtons();
 }}
 
-function updateHistoryDiv() {{
-    const el = document.getElementById('tree-history');
-    const frag = document.createDocumentFragment();
-    const label = document.createElement('span');
-    label.className = 'history-label';
-    label.textContent = 'history:';
-    frag.appendChild(label);
-    frag.appendChild(document.createElement('br'));
-    for (let i = navHistory.length - 1; i >= 0; i--) {{
-        const h = navHistory[i];
-        const num = navHistory.length - i;
-        const sep = document.createElement('span');
-        sep.className = 'history-sep';
-        sep.textContent = '>';
-        frag.appendChild(sep);
-        const item = document.createElement('span');
-        item.className = 'history-item';
-        item.innerHTML = `<span class="history-num">${{num}}</span>${{h.name}}`;
-        item.title = h.path;
-        item.onclick = (e) => {{
-            e.stopPropagation();
-            const node = findNodeByPath(dataTree, h.path);
-            if (node) renderContent(node);
-        }};
-        frag.appendChild(item);
-        frag.appendChild(document.createTextNode(' '));
+function navigateHistory(dir) {{
+    const idx = navHistoryIndex + dir;
+    if (idx < 0 || idx >= navHistory.length) return;
+    navHistoryIndex = idx;
+    updateNavButtons();
+    const h = navHistory[navHistoryIndex];
+    const node = findNodeByPath(dataTree, h.path);
+    if (node) {{
+        navIsTraversing = true;
+        renderContent(node);
     }}
-    el.innerHTML = '';
-    el.appendChild(frag);
+}}
+
+function updateNavButtons() {{
+    const back = document.getElementById('nav-back');
+    const fwd = document.getElementById('nav-fwd');
+    back.style.color = navHistoryIndex > 0 ? '#fff' : '#333';
+    fwd.style.color = navHistoryIndex < navHistory.length - 1 ? '#fff' : '#333';
 }}
 
 async function renderContent(node, page) {{
     if (page === undefined) {{
         if (!isInitialLoad && (!currentNode || currentNode.path !== node.path)) {{
-            recordHistory(node);
+            if (navIsTraversing) {{ navIsTraversing = false; }}
+            else {{
+                if (navHistory.length === 0 && currentNode) recordHistory(currentNode);
+                recordHistory(node);
+            }}
         }}
         if (!isInitialLoad) updateURL(node);
         updateURL(node);
         currentNode = node;
         updateTreeState(window.innerWidth > 768);
         let ch = node.children.length > 0 ? node.children : [node];
-        allFilteredChildren = ch.filter(child => (child.ai.length > 0 || child.at.length > 0) && !child.hid);
+        allFilteredChildren = ch.filter(child => (child.ai.length > 0 || child.at.length > 0 || (child.sp && child.sp.length > 0)) && !child.hid);
         currentPage = 0;
     }} else {{
         currentPage = page;
@@ -2570,7 +3132,8 @@ async function renderContent(node, page) {{
     
     const count = children.length;
     const isMobile = window.innerWidth <= 768;
-    const t = children.filter(c => !c.ai.length && c.at.length), d = children.filter(c => c.ai.length && !c.at.length);
+    const _has3d = c => c.ai.length > 0 || (c.rm === 'splat' && c.sp && c.sp.length > 0);
+    const t = children.filter(c => !_has3d(c) && c.at.length), d = children.filter(c => _has3d(c) && !c.at.length);
     const mvs = isMobile && count === 2 && (t.length === 2 || (t.length === 1 && d.length === 1));
     const asymmetric = !DIV_RATIO_HALF && !isMobile && count === 2 && t.length === 1 && d.length === 1;
     let cols = mvs ? 1 : Math.ceil(Math.sqrt(count));
@@ -2580,7 +3143,7 @@ async function renderContent(node, page) {{
         div.className = 'content-div';
         let childWidth;
         if (asymmetric) {{
-            const isText = !child.ai.length && child.at.length;
+            const isText = !_has3d(child) && child.at.length;
             childWidth = isText ? 'calc(40% - 2px)' : 'calc(60% - 2px)';
         }} else {{
             childWidth = mvs ? '100%' : `calc(${{100/cols}}% - 2px)`;
@@ -2602,7 +3165,10 @@ async function renderContent(node, page) {{
 
         div.appendChild(label);
 
-        if (child.ai.length > 0 && child.at.length > 0) {{
+        const isSplat = child.rm === 'splat' && child.sp && child.sp.length > 0;
+        const has3d = child.ai.length > 0 || isSplat;
+
+        if (has3d && child.at.length > 0) {{
             div.style.display = 'flex';
             div.style.flexDirection = 'row';
             
@@ -2663,7 +3229,7 @@ scriptTags.forEach(oldScript => {{
             div._sceneChild = child;
 
 
-        }} else if (child.ai.length > 0) {{
+        }} else if (has3d) {{
             div._sceneContainer = div;
             div._sceneChild = child;
        }} else if (child.at.length > 0) {{
@@ -2766,7 +3332,12 @@ scriptTags.forEach(oldScript => {{
     await new Promise(resolve => requestAnimationFrame(resolve));
     const sceneDivs = Array.from(contentDiv.children).filter(d => d._sceneContainer);
     for (const div of sceneDivs) {{
-        scenePromises.push(createThreeScene(div._sceneContainer, div._sceneChild.ai, div._sceneChild, currentNode.path));
+        const child = div._sceneChild;
+        if (child.rm === 'splat' && child.sp && child.sp.length > 0) {{
+            scenePromises.push(createSplatScene(div._sceneContainer, child.sp, child));
+        }} else {{
+            scenePromises.push(createThreeScene(div._sceneContainer, child.ai, child, currentNode.path));
+        }}
     }}
     await Promise.all(scenePromises);
     return Promise.resolve();

@@ -61,6 +61,7 @@ DEFAULTS = {
     'ROTATION_SPEED': 0.000015,
     'RANDOM_ZOOM': False,
     'ZOOM_VALUE': 0.4,
+    'ZOOM_PROPAGATE': False,
     'RANDOM_TEXTDIV_POSITION': False,
     'DIV_RATIO_HALF': False,
     'LOADINGSCREEN_IMG_INCREMENT': 50,
@@ -80,7 +81,7 @@ DEFAULTS = {
 # PROCESSING FLAGS
 # ==========================================
 
-PROCESS_IMG_LOWRES = False  # Overrides all sprite sizes to DEFAULTS values; dotfiles cannot override
+PROCESS_IMG_LOWRES = True  # Overrides all sprite sizes to DEFAULTS values; dotfiles cannot override
 
 if PROCESS_IMG_LOWRES:
     DEFAULTS['SPRITE_SIZE'] = 64
@@ -243,6 +244,7 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoo
     
     manual_spacing = inherited_spacing
     manual_zoom = inherited_zoom
+    zoom_propagate = False
     manual_reverse = inherited_reverse
     keywords = list(inherited_keywords) if inherited_keywords else []
     
@@ -286,6 +288,11 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoo
                                 manual_zoom = float(ast.literal_eval(value))
                             except:
                                 pass
+                        if key == 'ZOOM_PROPAGATE':
+                            try:
+                                zoom_propagate = ast.literal_eval(value)
+                            except:
+                                pass
             except:
                 pass
         
@@ -309,7 +316,7 @@ def scan_folder(path, parent_hidden=False, inherited_spacing=None, inherited_zoo
                 elif item.suffix.lower() == '.html':
                     texts.append(item.relative_to('.').as_posix())
             elif item.is_dir():
-                child = scan_folder(item, parent_hidden=is_hidden, inherited_spacing=manual_spacing, inherited_zoom=manual_zoom, inherited_keywords=keywords, inherited_reverse=manual_reverse, ignore=ignore)
+                child = scan_folder(item, parent_hidden=is_hidden, inherited_spacing=manual_spacing, inherited_zoom=manual_zoom if zoom_propagate else None, inherited_keywords=keywords, inherited_reverse=manual_reverse, ignore=ignore)
                 if child:
                     children.append(child)
         
@@ -857,6 +864,7 @@ sprite_config = {
     'div_ratio_half': DEFAULTS['DIV_RATIO_HALF'],
     'random_zoom': DEFAULTS['RANDOM_ZOOM'],
     'zoom_value': DEFAULTS['ZOOM_VALUE'],
+    'zoom_propagate': DEFAULTS['ZOOM_PROPAGATE'],
     'quickload_threshold': DEFAULTS['QUICKLOAD_THRESHOLD'],
     'lod_viewheight_thresholds': DEFAULTS['LOD_VIEWHEIGHT_THRESHOLDS'],
     'max_labels': DEFAULTS['MAX_LABELS'],
@@ -2765,7 +2773,9 @@ async function renderContent(node, page) {{
     const t = children.filter(c => !c.ai.length && c.at.length), d = children.filter(c => c.ai.length && !c.at.length);
     const mvs = isMobile && count === 2 && (t.length === 2 || (t.length === 1 && d.length === 1));
     const asymmetric = !DIV_RATIO_HALF && !isMobile && count === 2 && t.length === 1 && d.length === 1;
-    let cols = mvs ? 1 : Math.ceil(Math.sqrt(count));
+    //let cols = mvs ? 1 : Math.ceil(Math.sqrt(count));
+    let cols = mvs ? 1 : ((!isMobile && count <= 4) ? count : Math.ceil(Math.sqrt(count)));    //<----
+
     
     for (const child of children) {{
         const div = document.createElement('div');

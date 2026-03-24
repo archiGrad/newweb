@@ -39,6 +39,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 THREE.ColorManagement.enabled = false;
 
 (() => {
@@ -313,7 +316,7 @@ function assembleHtmlParts(parts, paths) {
         const dot = (spriteConfig.show_nav_accessories && spriteConfig.colored_html_dots) ? `<span class="page-dot" style="color:${seededColorFromPath(paths[i])}">●</span>` : '';
         const pageLabel = total > 1 ? `<div class="page-label">${i+1}/${total}${dot}</div>` : '';
         const separator = i < total - 1 ? '<hr class="page-separator">' : '';
-        return part + pageLabel + separator;
+        return `<div class="text-page"><div class="text-page-inner">${part}</div>${pageLabel}</div>${separator}`;
     }).join('');
 }
 
@@ -657,6 +660,9 @@ function disposeScene(sceneData) {
     if (sceneData.countDiv && sceneData.countDiv.parentNode) {
         sceneData.countDiv.parentNode.removeChild(sceneData.countDiv);
     }
+    if (sceneData.ssBgContainer && sceneData.ssBgContainer.parentNode) {
+        sceneData.ssBgContainer.parentNode.removeChild(sceneData.ssBgContainer);
+    }
     if (sceneData.renderer) {
         sceneData.renderer.dispose();
         if (sceneData.renderer.domElement.parentNode) {
@@ -693,6 +699,7 @@ async function createThreeScene(container, images, node, highlightPath) {
     });
     
     const folders = Object.keys(grouped);
+    const isLastStack = folders.length === 1;
     folders.forEach(folder => { grouped[folder].sort((a, b) => a.gi - b.gi); });
    
     progress.imgsTotal += images.length;
@@ -906,10 +913,75 @@ async function createThreeScene(container, images, node, highlightPath) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000);
     initKTX2(renderer);
+
+    let ssBgContainer = null;
+    let ssHighlight = null;
+    let ssSlotMap = [];
+    let ssMeshCache = null;
+    let ssWireframe = null;
+    if (isLastStack) {
+        renderer.setClearColor(0x000000, 0);
+        const ssPathsSet = new Set();
+        images.forEach(img => ssPathsSet.add(img.ss[1].replace('.ktx2', '.webp')));
+        const ssPaths = [...ssPathsSet];
+        images.forEach(img => {
+            const ssPath = img.ss[1].replace('.ktx2', '.webp');
+            const sz = img.sz;
+            const spr = Math.floor(SPRITESHEET_SIZE / sz);
+            if (img.anim && img.fm) {
+                const idx = img.fm[0];
+                const col = idx % spr;
+                const row = Math.floor(idx / spr);
+                ssSlotMap.push({ ssPath, px: col * sz, py: row * sz, pw: sz, ph: sz });
+            } else if (img.idx !== undefined) {
+                const col = img.idx % spr;
+                const row = Math.floor(img.idx / spr);
+                ssSlotMap.push({ ssPath, px: col * sz, py: row * sz, pw: sz, ph: sz });
+            }
+        });
+        ssBgContainer = document.createElement('div');
+        ssBgContainer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:0;pointer-events:none;';
+        const imgWrapper = document.createElement('div');
+        imgWrapper.style.cssText = 'display:flex;gap:4px;align-items:center;justify-content:center;';
+        ssPaths.forEach(ssPath => {
+            const img = document.createElement('img');
+            img.src = ssPath;
+            img.style.cssText = 'max-width:' + (80 / ssPaths.length) + '%;max-height:80%;object-fit:contain;image-rendering:pixelated;';
+            img.dataset.ssPath = ssPath;
+            imgWrapper.appendChild(img);
+        });
+        ssHighlight = document.createElement('div');
+        ssHighlight.style.cssText = 'position:absolute;border:2px solid #44f;pointer-events:none;display:none;z-index:1;box-sizing:border-box;';
+        ssBgContainer.appendChild(imgWrapper);
+        ssBgContainer.appendChild(ssHighlight);
+        container.appendChild(ssBgContainer);
+    }
+
     container.appendChild(renderer.domElement);
+    if (isLastStack) {
+        renderer.domElement.style.position = 'relative';
+        renderer.domElement.style.zIndex = '1';
+    }
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enablePan = true;
     controls.zoomSpeed = 3.0;
+
+    const _ssMouse = new THREE.Vector2(-999, -999);
+    const _ssRaycaster = new THREE.Raycaster();
+    let _ssMouseDirty = false;
+    if (isLastStack) {
+        renderer.domElement.addEventListener('mousemove', (e) => {
+            const rect = renderer.domElement.getBoundingClientRect();
+            _ssMouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            _ssMouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            _ssMouseDirty = true;
+        });
+        renderer.domElement.addEventListener('mouseleave', () => {
+            _ssMouseDirty = false;
+            if (ssHighlight) ssHighlight.style.display = 'none';
+            if (ssWireframe) ssWireframe.visible = false;
+        });
+    }
 
     let maxStackHeight = 0;
     folders.forEach(folder => {
@@ -1450,7 +1522,7 @@ const updateCount = () => {
             
 
 
-    const sceneData = { scene, renderer, camera, controls, animationId: null, resizeHandler, labelContainer, countDiv, stackGroups };
+    const sceneData = { scene, renderer, camera, controls, animationId: null, resizeHandler, labelContainer, countDiv, stackGroups, ssBgContainer };
 
     const frustum = new THREE.Frustum();
     const cameraViewProjectionMatrix = new THREE.Matrix4();
@@ -1759,6 +1831,76 @@ const updateCount = () => {
             }
         }
 
+        if (isLastStack && _ssMouseDirty && ssBgContainer) {
+            _ssMouseDirty = false;
+            if (!ssMeshCache) {
+                ssMeshCache = [];
+                scene.traverse(obj => { if (obj.isMesh) ssMeshCache.push(obj); });
+            }
+            scene.updateMatrixWorld();
+            _ssRaycaster.setFromCamera(_ssMouse, camera);
+            const _ssHits = _ssRaycaster.intersectObjects(ssMeshCache);
+            if (_ssHits.length > 0 && _ssHits[0].uv) {
+                const hit = _ssHits[0];
+                const uv = hit.uv;
+                const mat = hit.object.material;
+                const ssKtx = mat._ssArray ? mat._ssArray[1] : null;
+                const ssWebp = ssKtx ? ssKtx.replace('.ktx2', '.webp') : null;
+                const px = uv.x * SPRITESHEET_SIZE;
+                const py = (1 - uv.y) * SPRITESHEET_SIZE;
+                let hitSlot = null;
+                for (const slot of ssSlotMap) {
+                    if (slot.ssPath === ssWebp && px >= slot.px && px < slot.px + slot.pw && py >= slot.py && py < slot.py + slot.ph) {
+                        hitSlot = slot;
+                        break;
+                    }
+                }
+                const imgEl = ssWebp ? ssBgContainer.querySelector('img[data-ss-path="' + ssWebp + '"]') : null;
+                if (hitSlot && imgEl) {
+                    const imgRect = imgEl.getBoundingClientRect();
+                    const containerRect = container.getBoundingClientRect();
+                    const scale = imgRect.width / SPRITESHEET_SIZE;
+                    ssHighlight.style.display = 'block';
+                    ssHighlight.style.left = (imgRect.left - containerRect.left + hitSlot.px * scale) + 'px';
+                    ssHighlight.style.top = (imgRect.top - containerRect.top + hitSlot.py * scale) + 'px';
+                    ssHighlight.style.width = (hitSlot.pw * scale) + 'px';
+                    ssHighlight.style.height = (hitSlot.ph * scale) + 'px';
+                } else {
+                    ssHighlight.style.display = 'none';
+                }
+                const geo = hit.object.geometry;
+                const pos = geo.attributes.position;
+                const fi = hit.faceIndex;
+                const qi = Math.floor(fi / 2);
+                const vs = qi * 4;
+                const order = [0, 1, 3, 2];
+                const pts = [];
+                for (let i = 0; i < 4; i++) {
+                    pts.push(pos.getX(vs + order[i]), pos.getY(vs + order[i]), pos.getZ(vs + order[i]));
+                }
+                pts.push(pts[0], pts[1], pts[2]);
+                if (!ssWireframe) {
+                    const wGeo = new LineGeometry();
+                    wGeo.setPositions(pts);
+                    const wMat = new LineMaterial({ color: 0x4444ff, linewidth: 3 });
+                    wMat.resolution.set(container.clientWidth, container.clientHeight);
+                    ssWireframe = new Line2(wGeo, wMat);
+                    ssWireframe.renderOrder = 999;
+                    ssWireframe.frustumCulled = false;
+                    ssWireframe.computeLineDistances();
+                    hit.object.parent.add(ssWireframe);
+                } else {
+                    ssWireframe.geometry.setPositions(pts);
+                    ssWireframe.computeLineDistances();
+                    ssWireframe.material.resolution.set(container.clientWidth, container.clientHeight);
+                }
+                ssWireframe.visible = true;
+            } else {
+                if (ssHighlight) ssHighlight.style.display = 'none';
+                if (ssWireframe) ssWireframe.visible = false;
+            }
+        }
+
         frameCount++;
         renderer.render(scene, camera);
     }
@@ -1879,7 +2021,9 @@ async function renderContent(node, page) {
     const t = children.filter(c => !c.ai.length && c.at.length), d = children.filter(c => c.ai.length && !c.at.length);
     const mvs = isMobile && count === 2 && (t.length === 2 || (t.length === 1 && d.length === 1));
     const asymmetric = !DIV_RATIO_HALF && !isMobile && count === 2 && t.length === 1 && d.length === 1;
-    let cols = mvs ? 1 : Math.ceil(Math.sqrt(count));
+    //let cols = mvs ? 1 : Math.ceil(Math.sqrt(count));
+    let cols = mvs ? 1 : ((!isMobile && count <= 4) ? count : Math.ceil(Math.sqrt(count)));    //<----
+
     
     for (const child of children) {
         const div = document.createElement('div');
@@ -1937,6 +2081,7 @@ async function renderContent(node, page) {
             }
             
 textDiv.innerHTML = assembleHtmlParts(htmlParts, child.at);
+
 
 const scriptTags = textDiv.querySelectorAll('script');
 scriptTags.forEach(oldScript => {
