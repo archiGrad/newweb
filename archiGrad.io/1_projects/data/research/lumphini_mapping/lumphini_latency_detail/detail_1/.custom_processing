@@ -1,7 +1,13 @@
 # .custom_processing - Variables you can override per folder
 
 # Sprite Configuration
-SPRITE_SIZE = 256  # int: any positive integer
+#SPRITE_SIZE = 256  # int: any positive integer
+
+
+SPRITE_BG = True
+SPRITE_BG_OPACITY = 1
+
+
 
 # Image Sharpening
 # SHARPEN = True  # bool: True, False
@@ -29,7 +35,7 @@ SPRITE_SIZE = 256  # int: any positive integer
 # GIF_SPEED = 0.6  # float: 0.0-1.0 (0=slowest, 1=fastest)
 
 # Folder Label Settings
-IMAGE_SETTINGS_LABELS = False  # bool: True, False
+# IMAGE_SETTINGS_LABELS = True  # bool: True, False
 # IMAGE_SETTINGS_COLOR = 'white'  # str: 'white', 'black', or any valid PIL color name
 # IMAGE_SETTINGS_FONTSIZE = 3  # int: any positive integer (scaled automatically based on resolution)
 # IMAGE_SETTINGS_CUSTOMTEXT = "hello"  # str: any text (if empty, uses dotfile or folder name)
